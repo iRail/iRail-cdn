@@ -123,6 +123,7 @@ export async function buildSncb(options) {
     }] : [])],
     capabilities: {
       stations: curated ? 'available' : 'unavailable',
+      headsigns: enrichment.outputs.headsigns ? 'available' : 'unavailable',
       connections: 'available', stops: 'available', trips: 'available', routes: 'available', transfers: 'available',
       stopEnrichment: 'available', tripEnrichment: 'available', routeEnrichment: 'available',
       connectionEnrichment: 'unavailable', transferEnrichment: 'unavailable', shapes: 'unavailable',
@@ -130,6 +131,7 @@ export async function buildSncb(options) {
     },
     diagnostics: {
       unsupportedGtfs: { frequencies, pathways },
+      ...(enrichment.headsignDiagnostics ? { headsigns: enrichment.headsignDiagnostics } : {}),
       ...(enrichment.stationDiagnostics ? { stations: enrichment.stationDiagnostics } : {}),
       notes: [
         'The source feed has no shapes.txt content; shapes stay unavailable rather than being inferred from station pairs.',

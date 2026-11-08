@@ -127,7 +127,7 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
 
   // Core dictionaries.
   const tables = {};
-  for (const name of [...CORE_TABLES, 'stopEnrichment', 'tripEnrichment', 'routeEnrichment', ...(extensions.files?.stations ? ['stations'] : [])]) {
+  for (const name of [...CORE_TABLES, 'stopEnrichment', 'tripEnrichment', 'routeEnrichment', ...(extensions.files?.stations ? ['stations'] : []), ...(extensions.files?.headsigns ? ['headsigns'] : [])]) {
     const descriptor = extensions.files?.[name];
     if (!problems.check(descriptor && !Array.isArray(descriptor), `catalog has no ${name} descriptor`)) continue;
     const relative = sitePath(descriptor.path, prefix);
@@ -245,6 +245,14 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
     for (let i = 0; i < tripExtra.numRows; i++) if (route.get(i) !== column(routes, 'iri').get(routeOfTrip[idx[i]])) { problems.add(`tripEnrichment[${i}].routeIri disagrees with trips.routeIdx`); break; }
   }
   problems.check((extensions.capabilities?.stations === 'available') === Boolean(extensions.files?.stations), 'stations capability and catalog disagree');
+  problems.check((extensions.capabilities?.headsigns === 'available') === Boolean(extensions.files?.headsigns), 'headsigns capability and catalog disagree');
+  if (tables.headsigns) {
+    // One row per distinct trip headsign: a client can translate any trips.headsign by exact match.
+    const have = new Set(column(tables.headsigns, 'headsign').toArray());
+    const want = new Set(column(trips, 'headsign').toArray().filter(Boolean));
+    problems.check(have.size === tables.headsigns.numRows, 'headsigns contains a duplicate headsign');
+    problems.check(have.size === want.size && [...want].every((value) => have.has(value)), 'headsigns must list exactly the distinct trips.headsign values');
+  }
   if (tables.stations) {
     const { stations: curated, stopEnrichment } = tables;
     const seen = new Set();

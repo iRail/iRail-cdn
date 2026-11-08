@@ -48,6 +48,8 @@ Use `GTFS2LC_DIR` or `--converter` for another checkout; an unpinned or modified
 
 **Stations.** [iRail/stations](https://github.com/iRail/stations) (CC0), pinned in [config/stations.json](config/stations.json) and checked out by the workflow, supplies the curated station list. It is published as `stations.arrow` (743 stations incl. those outside the feed: neutral name plus French/Dutch/German/English alternatives, TAF/TAP and telegraph codes, country, coordinates, average stops, official transfer time) and fills the same fields in `stop-enrichment.arrow` for every stop and platform of a curated station. A null alternative means the neutral name applies. Locally pass `--stations ../irail-stations` (or `STATIONS_DIR`); without it the dataset is declared `unavailable` and the timetable is still built. Platform names, facilities and boarding statistics of that repository are not imported yet.
 
+**Headsigns.** The core `trips.headsign` is the feed's French text. The GTFS also translates headsigns to Dutch, German and English; `headsigns.arrow` publishes them as a lookup keyed by the French headsign (242 distinct values on 8 Nov 2026, 241 with Dutch and 239 with German/English; German/English values are bilingual as in the source).
+
 **Not yet available** (declared `unavailable` in `irail.json`, not published as empty tables): shapes (the feed has no `shapes.txt`), `connectionEnrichment`, `transferEnrichment`, platform overrides from `stop_time_overrides.txt`, a licence IRI (rights text only), and every live overlay. Native Pages conformance (media types, CORS, caching) and an independent browser reading the deployed site are production acceptance steps that need a first deployment.
 
 ## Check

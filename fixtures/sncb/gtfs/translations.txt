@@ -4,3 +4,7 @@ stops,stop_name,de,Fixture Alpha,,,Fixture Alpha
 stops,stop_name,en,Fixture Alpha,,,Fixture Alpha
 stops,stop_name,nl,Fixture Bravo,,,Fixture Bravo
 stops,stop_name,en,Fixture Bravo,,,Fixture Bravo
+trips,trip_headsign,nl,Charlie NL,,,Charlie
+trips,trip_headsign,de,Charlie / Charlie DE,,,Charlie
+trips,trip_headsign,en,Charlie EN,,,Charlie
+trips,trip_headsign,nl,Bravo NL,,,Bravo

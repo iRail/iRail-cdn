@@ -73,6 +73,19 @@ Schema metadata `dataset=transfers`, `schemaVersion=2-alpha`, and `releaseId=<st
 | 7 | `fromRouteIdx` | Int32 | yes |
 | 8 | `toRouteIdx` | Int32 | yes |
 
+## `headsigns.arrow`
+
+Schema metadata `dataset=headsigns`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table, built from GTFS `translations.txt` (`trips` / `trip_headsign`, keyed by the source-language text). One row per distinct `trips.headsign`; look a trip's headsign up by exact match.
+
+| Position | Field | Arrow type | Nullable |
+| --- | --- | --- | --- |
+| 1 | `headsign` | Utf8 | no |
+| 2 | `translationNl` | Utf8 | yes |
+| 3 | `translationDe` | Utf8 | yes |
+| 4 | `translationEn` | Utf8 | yes |
+
+`headsign` is in the feed's source language (`diagnostics.headsigns.sourceLanguage`, French for SNCB). Translations are published as the source gives them, which for German and English is often bilingual (`Anvers-Central / Antwerpen-Centraal`). Null means the source has no translation.
+
 ## `stations.arrow`
 
 Schema metadata `dataset=stations`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table with `format=irail-cdn-extensions`. One row per curated station of [iRail/stations](https://github.com/iRail/stations) (CC0), including stations that are not in the timetable feed. It joins to `stopEnrichment.stationIri` and to the stations IRIs of external iRail data on `iri`.

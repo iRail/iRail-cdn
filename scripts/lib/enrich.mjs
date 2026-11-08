@@ -134,8 +134,29 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
     });
   }
 
+  // Headsign translations: GTFS keys them by the source-language text (field_value); per-trip record_id rows are not used.
+  const headsignRows = new Map();
+  const headsignTranslations = translations.filter((row) => row.table_name === 'trips' && row.field_name === 'trip_headsign' && !row.record_id);
+  for (const trip of tripsRaw) if (trip.trip_headsign && !headsignRows.has(trip.trip_headsign)) headsignRows.set(trip.trip_headsign, { headsign: trip.trip_headsign, translationNl: null, translationDe: null, translationEn: null });
+  const translated = { nl: 0, de: 0, en: 0 };
+  for (const row of headsignTranslations) {
+    const target = headsignRows.get(row.field_value);
+    const language = row.language.toLowerCase().slice(0, 2);
+    if (!target || !(language in translated) || !row.translation) continue;
+    const field = `translation${language[0].toUpperCase()}${language[1]}`;
+    if (target[field] === null) translated[language]++;
+    target[field] = row.translation;
+  }
+  const headsigns = [...headsignRows.values()].sort((a, b) => (a.headsign < b.headsign ? -1 : 1));
+
   const metadata = { releaseId };
   const outputs = {};
+  let headsignDiagnostics = null;
+  if (headsignTranslations.length) {
+    await writeFile(path.join(releaseDir, 'headsigns.arrow'), encodeRows('headsigns', headsigns, metadata));
+    outputs.headsigns = { file: 'headsigns.arrow', rowCount: headsigns.length };
+    headsignDiagnostics = { distinct: headsigns.length, translated, sourceLanguage: defaultLanguage || null };
+  }
   let stationDiagnostics = null;
   if (stations) {
     await writeFile(path.join(releaseDir, 'stations.arrow'), encodeRows('stations', stations, metadata));
@@ -152,5 +173,5 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
   }
   const strategyBytes = `${JSON.stringify(strategy.snapshot, null, 2)}\n`;
   await writeFile(path.join(releaseDir, 'identity-strategy.json'), strategyBytes);
-  return { outputs, strategy: strategy.snapshot, strategySha256: sha256(strategyBytes), stationDiagnostics };
+  return { outputs, strategy: strategy.snapshot, strategySha256: sha256(strategyBytes), stationDiagnostics, headsignDiagnostics };
 }

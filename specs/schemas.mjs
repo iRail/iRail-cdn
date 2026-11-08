@@ -20,6 +20,11 @@ export const extensionDefinitions = {
     field('lat', 'Float64'), field('lon', 'Float64'),
     field('avgStopTimes', 'Float64', true), field('officialTransferTime', 'Uint32', true),
   ],
+  // Translations of `trips.headsign` (source language) from GTFS translations.txt, one row per distinct headsign.
+  headsigns: [
+    field('headsign', 'Utf8'),
+    ...['translationNl', 'translationDe', 'translationEn'].map((name) => field(name, 'Utf8', true)),
+  ],
   stopEnrichment: [
     field('stopIdx', 'Int32'), field('stopId', 'Utf8'), field('regionIdx', 'Int32', true),
     field('stationIri', 'Utf8', true), field('stationId', 'Utf8', true), field('hafasId', 'Utf8', true),

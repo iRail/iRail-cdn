@@ -61,6 +61,8 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.equal(extensions.capabilities.realtime, 'unconfigured');
   assert.equal(extensions.capabilities.shapes, 'unavailable');
   assert.equal(extensions.capabilities.stations, 'available');
+  assert.equal(extensions.capabilities.headsigns, 'available');
+  assert.deepEqual(extensions.diagnostics.headsigns, { distinct: 4, translated: { nl: 2, de: 1, en: 1 }, sourceLanguage: 'fr' });
   assert.deepEqual(extensions.sources.map((source) => source.id), ['gtfs-static', 'irail-stations']);
   assert.equal(extensions.sources[1].license, 'https://creativecommons.org/publicdomain/zero/1.0/');
   assert.deepEqual(extensions.diagnostics.stations, { curated: 5, matchedInGtfs: 4, curatedNotInGtfs: 1, gtfsStationsWithoutCuratedEntry: 0 });
@@ -98,6 +100,12 @@ test('canonical iRail IRIs: SNCB stations and vehicles are preserved, runs and c
   assert.equal(abroad.countryCode, 'GB');
   assert.equal(abroad.stationIri, abroad.iri, 'an unverified stop is its own station');
   assert.equal(stops.getChild('iri').get(0).startsWith('https://irail.be/id/be.sncb/stops/'), true);
+  const headsigns = rows(await load(dir, releaseFile(a.releaseId, 'headsigns.arrow')));
+  assert.deepEqual(headsigns.map((row) => row.headsign), ['Abroad', 'Bravo', 'Charlie', 'Delta']);
+  const charlie = headsigns.find((row) => row.headsign === 'Charlie');
+  assert.deepEqual([charlie.translationNl, charlie.translationDe, charlie.translationEn], ['Charlie NL', 'Charlie / Charlie DE', 'Charlie EN']);
+  const bravo = headsigns.find((row) => row.headsign === 'Bravo');
+  assert.deepEqual([bravo.translationNl, bravo.translationDe, bravo.translationEn], ['Bravo NL', null, null], 'untranslated languages stay null');
   const tripExtra = rows(await load(dir, releaseFile(a.releaseId, 'trip-enrichment.arrow')));
   const ic1000 = tripExtra.filter((row) => row.vehicleIri === 'http://irail.be/vehicle/IC1000');
   assert.equal(ic1000.length, 2, 'two scheduled trips share one vehicle number');
