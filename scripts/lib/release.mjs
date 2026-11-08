@@ -39,7 +39,7 @@ export async function catalogFiles(releaseDir, releasePath) {
  * Writes `irail.json` and the extended manifests. `staged.manifest` is the converter's discovery document,
  * whose `@id` is the mutable root; the immutable copy inside the release gets its own `@id`.
  */
-export async function finalizeRelease({ stagingDir, releaseId, prefix, sourceId, strategy, strategySha256, source, capabilities, diagnostics, status = 'available' }) {
+export async function finalizeRelease({ stagingDir, releaseId, prefix, sourceId, strategy, strategySha256, sources, capabilities, diagnostics, status = 'available' }) {
   const releaseDir = path.join(stagingDir, 'releases', releaseId);
   const releasePath = `${prefix}/releases/${releaseId}`;
   const manifest = await readJson(path.join(releaseDir, RELEASE_MANIFEST));
@@ -52,7 +52,7 @@ export async function finalizeRelease({ stagingDir, releaseId, prefix, sourceId,
     format: 'irail-cdn-extensions', version: extensionVersion, status, sourceId,
     identityProfile: strategy.identityProfile, identityBase: strategy.identityBase,
     releaseId, generatedAt: manifest.generatedAt,
-    sources: [source],
+    sources,
     serviceDates: { start: day(manifest.coverageStart), end: day(manifest.coverageEnd) },
     partitioning: { timePartitionSeconds: TIME_PARTITION_SECONDS, maxRows: MAX_PAGE_ROWS, regions },
     capabilities, diagnostics, files,

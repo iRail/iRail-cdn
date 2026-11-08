@@ -127,7 +127,7 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
 
   // Core dictionaries.
   const tables = {};
-  for (const name of [...CORE_TABLES, 'stopEnrichment', 'tripEnrichment', 'routeEnrichment']) {
+  for (const name of [...CORE_TABLES, 'stopEnrichment', 'tripEnrichment', 'routeEnrichment', ...(extensions.files?.stations ? ['stations'] : [])]) {
     const descriptor = extensions.files?.[name];
     if (!problems.check(descriptor && !Array.isArray(descriptor), `catalog has no ${name} descriptor`)) continue;
     const relative = sitePath(descriptor.path, prefix);
@@ -243,6 +243,22 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
   if (tripExtra) {
     const route = column(tripExtra, 'routeIri'); const idx = numbers(tripExtra, 'tripIdx');
     for (let i = 0; i < tripExtra.numRows; i++) if (route.get(i) !== column(routes, 'iri').get(routeOfTrip[idx[i]])) { problems.add(`tripEnrichment[${i}].routeIri disagrees with trips.routeIdx`); break; }
+  }
+  problems.check((extensions.capabilities?.stations === 'available') === Boolean(extensions.files?.stations), 'stations capability and catalog disagree');
+  if (tables.stations) {
+    const { stations: curated, stopEnrichment } = tables;
+    const seen = new Set();
+    const iri = column(curated, 'iri'); const lat = numbers(curated, 'lat'); const lon = numbers(curated, 'lon'); const name = column(curated, 'name');
+    for (let i = 0; i < curated.numRows; i++) {
+      problems.check(/^http:\/\/irail\.be\/stations\/NMBS\/\d{9}$/u.test(iri.get(i)) && !seen.has(iri.get(i)), `stations[${i}] has an invalid or duplicate iri`);
+      seen.add(iri.get(i));
+      problems.check(name.get(i) && Math.abs(lat[i]) <= 90 && Math.abs(lon[i]) <= 180, `stations[${i}] has no name or invalid coordinates`);
+    }
+    if (stopEnrichment) {
+      // Every stop whose station is curated carries that station's names; none of them may be empty.
+      const station = column(stopEnrichment, 'stationIri'); const fr = column(stopEnrichment, 'nameFr');
+      for (let i = 0; i < stopEnrichment.numRows; i++) if (seen.has(station.get(i)) && !fr.get(i)) { problems.add(`stopEnrichment[${i}] lacks a name although its station is curated`); break; }
+    }
   }
   for (const [name, state] of Object.entries(extensions.capabilities ?? {})) {
     if (state === 'available' && !(name in definitions && extensions.files?.[name])) {

@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/iRail/stations.git",
+  "branch": "master",
+  "commit": "3aa701a089634f9c71b77a8e3d856edebdba37d4",
+  "file": "stations.csv",
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "description": "iRail stations: curated NMBS/SNCB and international station names in all languages, TAF/TAP and telegraph codes, country, coordinates, average stop times and official transfer times",
+  "notes": "Pinned by commit. The station URIs of this dataset (http://irail.be/stations/NMBS/00<hafas>) are the station IRIs minted for be.sncb, so rows join on IRI."
+}

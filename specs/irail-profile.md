@@ -14,6 +14,7 @@ The extension manifest, catalog and all static extension files are pinned to the
 
 | Dataset | Data beyond LC |
 | --- | --- |
+| `stations` | Curated station list in all languages (iRail/stations): names, alternatives, TAF/TAP and telegraph codes, country, coordinates, average stops, official transfer time |
 | `stopEnrichment` | Raw `stopId`, optional local region alias, station identity/codes, multilingual names, platform, transfer provenance and accessibility |
 | `tripEnrichment` | Raw `tripId`, route IRI, vehicle/display identity, shape/geometry references, direction/block and accessibility |
 | `routeEnrichment` | Raw `routeId` / `agencyId`, agency IRI and product |

@@ -24,7 +24,8 @@ if (!available && process.env.REQUIRE_CONVERTER) throw new Error(`gtfs2lc is req
 const skip = available ? false : `gtfs2lc checkout not found at ${converterDir}; set GTFS2LC_DIR`;
 const work = path.join(root, 'build', 'test');
 const PROJECT = '/iRail-cdn';
-const common = { converterDir, startDate: '20261024', endDate: '20261111', regions: 1, allowUnpinned: process.env.GTFS2LC_ALLOW_UNPINNED === '1' };
+const stationsDir = path.join(root, 'fixtures', 'sncb', 'stations');
+const common = { converterDir, stationsDir, allowUnpinnedStations: true, startDate: '20261024', endDate: '20261111', regions: 1, allowUnpinned: process.env.GTFS2LC_ALLOW_UNPINNED === '1' };
 
 async function stage(name, { prefix = PROJECT, today = '20261109', gtfs = 'fixtures/sncb/gtfs', ...extra } = {}) {
   const directory = path.join(work, name);
@@ -48,6 +49,7 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.equal(a.rows.stops, 13);
   assert.equal(a.rows.trips, 7);
   assert.equal(a.rows.transfers, 4);
+  assert.equal(a.rows.stations, 5);
   const manifest = await readJson(path.join(a.staging, 'manifest.jsonld'));
   assert.equal(manifest['@id'], `${PROJECT}/manifest.jsonld`);
   assert.equal(manifest.realtime, undefined, 'no provider live link until the live resources exist');
@@ -58,6 +60,10 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.equal(extensions.capabilities.occupancy, 'unavailable');
   assert.equal(extensions.capabilities.realtime, 'unconfigured');
   assert.equal(extensions.capabilities.shapes, 'unavailable');
+  assert.equal(extensions.capabilities.stations, 'available');
+  assert.deepEqual(extensions.sources.map((source) => source.id), ['gtfs-static', 'irail-stations']);
+  assert.equal(extensions.sources[1].license, 'https://creativecommons.org/publicdomain/zero/1.0/');
+  assert.deepEqual(extensions.diagnostics.stations, { curated: 5, matchedInGtfs: 4, curatedNotInGtfs: 1, gtfsStationsWithoutCuratedEntry: 0 });
   assert.deepEqual(extensions.diagnostics.unsupportedGtfs, { frequencies: 0, pathways: 0 });
   assert.equal(extensions.sources[0].converter.commit, extensions.sources[0].converter.pinnedCommit);
   assert.equal(extensions.files.connections.length, manifest.connections.pages.length);
@@ -73,7 +79,19 @@ test('canonical iRail IRIs: SNCB stations and vehicles are preserved, runs and c
   assert.equal(platform.hafasId, '8899001');
   assert.equal(platform.platformCode, '1');
   assert.equal(platform.nameNl, 'Fixture Alfa');
-  assert.equal(platform.nameFr, 'Fixture Alpha');
+  assert.equal(platform.nameFr, 'Fixture Alpha', 'an empty alternative means the neutral name applies');
+  assert.equal(platform.nameDe, 'Fixture Alpha Hbf');
+  assert.equal(platform.nameEn, 'Fixture Alpha Central');
+  assert.equal(platform.tafTapCode, 'BE99001');
+  assert.equal(platform.telegraphCode, 'FXA');
+  assert.equal(platform.officialTransferTime, 300);
+  assert.equal(platform.avgStopTimes, 120.5);
+  assert.equal(platform.countryCode, 'BE');
+  const curated = rows(await load(dir, releaseFile(a.releaseId, 'stations.arrow')));
+  assert.equal(curated.length, 5);
+  const alpha = curated.find((row) => row.iri === 'http://irail.be/stations/NMBS/008899001');
+  assert.deepEqual([alpha.name, alpha.alternativeFr, alpha.alternativeNl, alpha.alternativeDe, alpha.alternativeEn], ['Fixture Alpha', null, 'Fixture Alfa', 'Fixture Alpha Hbf', 'Fixture Alpha Central']);
+  assert.ok(curated.some((row) => row.iri.endsWith('008899099')), 'curated stations outside the feed are published too');
   assert.equal(platform.parentIri, stops.getChild('iri').get(stops.getChild('iri').toArray().findIndex((iri) => iri.endsWith('/stops/S8899001'))));
   assert.equal(stopExtra.find((row) => row.stopId === 'S8899002').stationIri, 'http://irail.be/stations/NMBS/008899002');
   const abroad = stopExtra.find((row) => row.stopId === '7099001');
@@ -118,6 +136,26 @@ test('DST fall-back, after-midnight times, linked transfers and pickup/drop-off 
   assert.equal(type4.toStopIdx, null);
   assert.notEqual(type4.fromTripIdx, null);
   assert.notEqual(linked.find((row) => row.transferType === 5).fromStopIdx, null);
+});
+
+test('the curated stations source is optional, pinned and strictly parsed', { skip }, async () => {
+  const without = await stage('no-stations', { stationsDir: undefined });
+  const extensions = await readJson(path.join(without.staging, releaseFile(without.releaseId, RELEASE_EXTENSIONS)));
+  assert.equal(extensions.capabilities.stations, 'unavailable');
+  assert.equal(extensions.files.stations, undefined);
+  assert.deepEqual(extensions.sources.map((source) => source.id), ['gtfs-static']);
+  assert.notEqual(without.releaseId, a.releaseId);
+  const stopRow = rows(await load(without.staging, releaseFile(without.releaseId, 'stop-enrichment.arrow'))).find((row) => row.stopId === '8899001_1');
+  assert.equal(stopRow.nameNl, 'Fixture Alfa', 'GTFS translations still apply without the curated source');
+  assert.equal(stopRow.tafTapCode, null);
+  // Only the pinned commit is accepted for production builds.
+  await assert.rejects(stage('unpinned', { allowUnpinnedStations: false, allowUnpinned: false, stationsDir }), /expected pinned commit|gtfs2lc at/);
+  const broken = path.join(work, 'broken-stations');
+  await rm(broken, { recursive: true, force: true });
+  await cp(stationsDir, broken, { recursive: true });
+  await writeFile(path.join(broken, 'stations.csv'), (await readFile(path.join(broken, 'stations.csv'), 'utf8')).replace('4.3,50.8', '4.3,north'));
+  await assert.rejects(stage('broken', { stationsDir: broken }), /invalid latitude/);
+  assert.equal(existsSync(path.join(work, 'broken', 'staging', 'manifest.jsonld')), false);
 });
 
 test('unsupported GTFS features are rejected rather than silently dropped', { skip }, async () => {

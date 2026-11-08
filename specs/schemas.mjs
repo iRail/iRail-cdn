@@ -12,6 +12,14 @@ const event = [...run, field('stopSequence', 'Uint32')];
 const observation = [field('source', 'Utf8'), field('observedAt', 'Int64')];
 
 export const extensionDefinitions = {
+  // One row per curated station, including stations that are not in the GTFS feed. `name` is the neutral name;
+  // an empty alternative means the neutral name applies to that language.
+  stations: [
+    field('name', 'Utf8'),
+    ...['alternativeFr', 'alternativeNl', 'alternativeDe', 'alternativeEn', 'tafTapCode', 'telegraphCode', 'countryCode'].map((name) => field(name, 'Utf8', true)),
+    field('lat', 'Float64'), field('lon', 'Float64'),
+    field('avgStopTimes', 'Float64', true), field('officialTransferTime', 'Uint32', true),
+  ],
   stopEnrichment: [
     field('stopIdx', 'Int32'), field('stopId', 'Utf8'), field('regionIdx', 'Int32', true),
     field('stationIri', 'Utf8', true), field('stationId', 'Utf8', true), field('hafasId', 'Utf8', true),
@@ -74,6 +82,7 @@ export const extensionDefinitions = {
 // IRIs are the interchange identity; integer indices remain release-local accelerators.
 const iriFields = {
   connectionEnrichment: ['iri', 'tripIri', 'runIri', 'departureStopIri', 'arrivalStopIri', 'departureCallIri', 'arrivalCallIri'],
+  stations: ['iri'],
   stopEnrichment: ['iri'],
   tripEnrichment: ['iri', 'routeIri'],
   routeEnrichment: ['iri', 'agencyIri'],

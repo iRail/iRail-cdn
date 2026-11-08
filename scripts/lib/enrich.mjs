@@ -40,7 +40,11 @@ function indexByIri(table, raw, mintFor, kind) {
   return byIri;
 }
 
-export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig }) {
+/**
+ * @param {Array<object>} [stations] curated rows from scripts/lib/stations.mjs. They override GTFS names, codes and
+ *   transfer data for every stop whose station IRI is one of them, and are published once more as `stations.arrow`.
+ */
+export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations }) {
   const strategy = createIriStrategy(sourceId, strategyConfig, new IriRegistry());
   const { mint } = strategy;
   const read = async (name) => tableFromIPC(await readFile(path.join(releaseDir, `${name}.arrow`)));
@@ -63,6 +67,8 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
   const localized = (language, stop) => names.get(`${language}\u0000id\u0000${stop.stop_id}`) ?? names.get(`${language}\u0000name\u0000${stop.stop_name}`)
     ?? (language === defaultLanguage ? stop.stop_name : null) ?? null;
 
+  const curated = new Map((stations ?? []).map((station) => [station.iri, station]));
+  const matched = new Set();
   const stopRows = [];
   for (let stopIdx = 0; stopIdx < stopsTable.numRows; stopIdx++) {
     const core = stopsTable.get(stopIdx);
@@ -78,12 +84,19 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
     }
     const verified = sourceId === 'be.sncb' && root.location_type === '1' ? STATION_ROOT.exec(root.stop_id) : null;
     const hafas = NMBS_STOP_ID.exec(stop.stop_id)?.[1] ?? null;
+    const stationIri = verified ? mint('station', { stops: { ...root, key: verified[1], uic: verified[1] } }, [verified[1]]) : stopMint(root);
+    const station = curated.get(stationIri);
+    if (station) matched.add(stationIri);
+    const neutral = (alternative) => (station ? alternative ?? station.name : null);
     stopRows.push({
       stopIdx, stopId: stop.stop_id, regionIdx: null,
-      stationIri: verified ? mint('station', { stops: { ...root, key: verified[1], uic: verified[1] } }, [verified[1]]) : stopMint(root),
+      stationIri,
       stationId: hafas ? `00${hafas}` : null, hafasId: hafas,
-      nameNl: localized('nl', stop), nameFr: localized('fr', stop), nameDe: localized('de', stop), nameEn: localized('en', stop),
-      countryCode: hafas ? UIC_COUNTRY[hafas.slice(0, 2)] ?? null : null,
+      nameNl: neutral(station?.alternativeNl) ?? localized('nl', stop), nameFr: neutral(station?.alternativeFr) ?? localized('fr', stop),
+      nameDe: neutral(station?.alternativeDe) ?? localized('de', stop), nameEn: neutral(station?.alternativeEn) ?? localized('en', stop),
+      countryCode: station?.countryCode ?? (hafas ? UIC_COUNTRY[hafas.slice(0, 2)] ?? null : null),
+      tafTapCode: station?.tafTapCode ?? null, telegraphCode: station?.telegraphCode ?? null,
+      officialTransferTime: station?.officialTransferTime ?? null, avgStopTimes: station?.avgStopTimes ?? null,
       platformCode: stop.platform_code || null, wheelchairBoarding: small(stop.wheelchair_boarding, 2),
       iri: core.iri, parentIri: core.parentIdx >= 0 ? stopsTable.get(core.parentIdx).iri : null,
     });
@@ -123,11 +136,21 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
 
   const metadata = { releaseId };
   const outputs = {};
+  let stationDiagnostics = null;
+  if (stations) {
+    await writeFile(path.join(releaseDir, 'stations.arrow'), encodeRows('stations', stations, metadata));
+    outputs.stations = { file: 'stations.arrow', rowCount: stations.length };
+    const gtfsStations = new Set(stopRows.filter((row) => row.stationIri.startsWith(strategy.snapshot.bases?.stations ?? '\u0000')).map((row) => row.stationIri));
+    stationDiagnostics = {
+      curated: stations.length, matchedInGtfs: matched.size, curatedNotInGtfs: stations.length - matched.size,
+      gtfsStationsWithoutCuratedEntry: [...gtfsStations].filter((iri) => !curated.has(iri)).length,
+    };
+  }
   for (const [name, file, rows] of [['stopEnrichment', 'stop-enrichment.arrow', stopRows], ['tripEnrichment', 'trip-enrichment.arrow', tripRows], ['routeEnrichment', 'route-enrichment.arrow', routeRows]]) {
     await writeFile(path.join(releaseDir, file), encodeRows(name, rows, metadata));
     outputs[name] = { file, rowCount: rows.length };
   }
   const strategyBytes = `${JSON.stringify(strategy.snapshot, null, 2)}\n`;
   await writeFile(path.join(releaseDir, 'identity-strategy.json'), strategyBytes);
-  return { outputs, strategy: strategy.snapshot, strategySha256: sha256(strategyBytes) };
+  return { outputs, strategy: strategy.snapshot, strategySha256: sha256(strategyBytes), stationDiagnostics };
 }

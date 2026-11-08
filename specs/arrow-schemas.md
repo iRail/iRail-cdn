@@ -73,6 +73,28 @@ Schema metadata `dataset=transfers`, `schemaVersion=2-alpha`, and `releaseId=<st
 | 7 | `fromRouteIdx` | Int32 | yes |
 | 8 | `toRouteIdx` | Int32 | yes |
 
+## `stations.arrow`
+
+Schema metadata `dataset=stations`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table with `format=irail-cdn-extensions`. One row per curated station of [iRail/stations](https://github.com/iRail/stations) (CC0), including stations that are not in the timetable feed. It joins to `stopEnrichment.stationIri` and to the stations IRIs of external iRail data on `iri`.
+
+| Position | Field | Arrow type | Nullable |
+| --- | --- | --- | --- |
+| 1 | `name` | Utf8 | no |
+| 2 | `alternativeFr` | Utf8 | yes |
+| 3 | `alternativeNl` | Utf8 | yes |
+| 4 | `alternativeDe` | Utf8 | yes |
+| 5 | `alternativeEn` | Utf8 | yes |
+| 6 | `tafTapCode` | Utf8 | yes |
+| 7 | `telegraphCode` | Utf8 | yes |
+| 8 | `countryCode` | Utf8 | yes |
+| 9 | `lat` | Float64 | no |
+| 10 | `lon` | Float64 | no |
+| 11 | `avgStopTimes` | Float64 | yes |
+| 12 | `officialTransferTime` | Uint32 | yes |
+| 13 | `iri` | Utf8 | no |
+
+`name` is the neutral name; a null alternative means the neutral name is used in that language. `countryCode` is upper-case ISO 3166-1 alpha-2.
+
 ## `stop-enrichment.arrow`
 
 Schema metadata `dataset=stopEnrichment`, `schemaVersion=1-alpha`, and `releaseId=<static release>`. iRail side table, with `format=irail-cdn-extensions` and `identityProfile=irail-global-v1`.

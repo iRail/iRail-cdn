@@ -1,0 +1,6 @@
+URI,name,alternative-fr,alternative-nl,alternative-de,alternative-en,taf-tap-code,telegraph-code,country-code,longitude,latitude,avg_stop_times,official_transfer_time
+http://irail.be/stations/NMBS/008899001,Fixture Alpha,,Fixture Alfa,Fixture Alpha Hbf,Fixture Alpha Central,BE99001,FXA,be,4.3,50.8,120.5,300
+http://irail.be/stations/NMBS/008899002,Fixture Bravo,Fixture Bravo FR,,,,BE99002,FXB,be,4.35,50.85,80,240
+http://irail.be/stations/NMBS/008899003,Fixture Charlie,,,,,,,be,4.4,50.9,40.25,
+http://irail.be/stations/NMBS/008899004,Fixture Delta,,,,,,,be,4.5,51,10,
+http://irail.be/stations/NMBS/008899099,Fixture Elsewhere,,,,,,,nl,5.1,52.1,0,
