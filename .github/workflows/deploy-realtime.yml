@@ -1,0 +1,67 @@
+name: Deploy GTFS-RT publisher
+
+# Deploys the cron-only Cloudflare Worker that republishes the open NMBS/SNCB GTFS-RT feed (latest snapshot only,
+# every 30 s) to the public R2 bucket behind cdn.routableconnections.com. The planned-data pipeline does not depend
+# on it. One-time Cloudflare setup (bucket, custom domain, CORS, cache rule): docs/cloudflare-setup.md.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/gtfs-rt/**'
+      - 'wrangler.worker.jsonc'
+      - 'scripts/check-realtime.mjs'
+      - 'test/gtfs-rt.test.mjs'
+      - '.github/workflows/deploy-realtime.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-realtime
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check:realtime
+
+  deploy:
+    name: Deploy Worker
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Secrets live in a GitHub environment, so only this job can read the Cloudflare token.
+    environment: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.158.0'
+          command: deploy --config wrangler.worker.jsonc
+
+  verify:
+    name: Check the published feed
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # The first cron run happens within a minute of the deploy; allow for a cold edge cache.
+      - run: sleep 120
+      - run: node scripts/check-realtime.mjs "https://cdn.routableconnections.com" --summary "$GITHUB_STEP_SUMMARY"
+        continue-on-error: true

@@ -189,6 +189,22 @@ test('the curated stations source is optional, pinned and strictly parsed', { sk
   assert.equal(existsSync(path.join(work, 'broken', 'staging', 'manifest.jsonld')), false);
 });
 
+test('the live GTFS-RT feed is linked from the manifest only when enabled, with a verified trip template', { skip }, async () => {
+  const feed = { '@id': 'https://cdn.routableconnections.com/realtime/gtfs-rt/trip-updates.pb', '@type': 'GtfsRealtimeFeed', tripTemplate: 'https://irail.be/id/be.sncb/trips/{trip_id}' };
+  const without = await readJson(path.join(a.staging, 'manifest.jsonld'));
+  assert.equal(without.realtime, undefined);
+  assert.equal((await readJson(path.join(a.staging, releaseFile(a.releaseId, RELEASE_EXTENSIONS)))).capabilities.realtime, 'unconfigured');
+  const linked = await stage('realtime', { realtime: [feed] });
+  const manifest = await readJson(path.join(linked.staging, 'manifest.jsonld'));
+  assert.deepEqual(manifest.realtime, [feed]);
+  const extensions = await readJson(path.join(linked.staging, releaseFile(linked.releaseId, RELEASE_EXTENSIONS)));
+  assert.equal(extensions.capabilities.realtime, 'available');
+  assert.equal(extensions.sources.find((source) => source.id === 'gtfs-rt').feeds[0], feed['@id']);
+  assert.notEqual(linked.releaseId, a.releaseId, 'advertising a feed is a different release');
+  // Every trip id of the feed must expand to the release's trip IRI, or the build fails instead of advertising a broken link.
+  await assert.rejects(stage('realtime-bad', { realtime: [{ ...feed, tripTemplate: 'https://irail.be/id/be.sncb/other/{trip_id}' }] }), /does not reproduce trip IRI/);
+});
+
 test('unsupported GTFS features are rejected rather than silently dropped', { skip }, async () => {
   const directory = path.join(work, 'frequencies');
   await rm(directory, { recursive: true, force: true });

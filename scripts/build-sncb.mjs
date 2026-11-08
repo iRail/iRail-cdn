@@ -58,6 +58,8 @@ async function countRows(gtfsDir, name) {
  * @param {string} [options.archive] local GTFS zip; otherwise `config.gtfs.url` is downloaded
  * @param {string} [options.stationsDir] checkout of github.com/iRail/stations at the commit in config/stations.json; without it
  *   the `stations` dataset is declared unavailable and the timetable is still built
+ * @param {Array<object>|false} [options.realtime] GTFS Realtime feed descriptors for the manifest; defaults to config/sncb.json
+ *   (`realtime.enabled`). The converter verifies every template against the trip IRIs.
  * @param {string} [options.gtfsDir] an already extracted directory (tests); copied by the caller if it must stay pristine
  */
 export async function buildSncb(options) {
@@ -74,6 +76,13 @@ export async function buildSncb(options) {
   const converterDir = path.resolve(options.converterDir ?? process.env.GTFS2LC_DIR ?? path.join(root, '..', 'gtfs2lc'));
   await verifyConverter(converterDir, pin, { allowUnpinned: options.allowUnpinned });
 
+  const realtime = options.realtime === false ? undefined : options.realtime ?? (config.realtime?.enabled ? config.realtime.feeds : undefined);
+  let realtimePath;
+  if (realtime) {
+    await mkdir(workDir, { recursive: true });
+    realtimePath = path.join(workDir, 'realtime.json');
+    await writeFile(realtimePath, `${JSON.stringify(realtime, null, 2)}\n`);
+  }
   let curated = null;
   if (options.stationsDir) {
     const stationsDir = path.resolve(options.stationsDir);
@@ -102,7 +111,7 @@ export async function buildSncb(options) {
   if (feed.end && endDate > feed.end) endDate = feed.end;
   if (startDate > endDate) throw new Error(`The feed (${feed.start}..${feed.end}) does not cover the requested horizon ${startDate}..${endDate}`);
   const regions = options.regions ?? config.regions;
-  const inputs = sha8(archive.sha256 ?? feed.version, await pipelineFingerprint(), pin.commit, curated?.sha256 ?? null, strategyConfig, startDate, endDate, regions, prefix);
+  const inputs = sha8(archive.sha256 ?? feed.version, await pipelineFingerprint(), pin.commit, curated?.sha256 ?? null, realtime ?? null, strategyConfig, startDate, endDate, regions, prefix);
   const releaseId = options.releaseId ?? `${sourceId.replace(/^[a-z]+\./u, '')}-${today}-${inputs}`;
 
   if (options.previousDir) {
@@ -113,7 +122,7 @@ export async function buildSncb(options) {
   console.error(`Converting ${startDate}..${endDate} as ${releaseId} (feed ${feed.version ?? 'unversioned'})`);
   const { converter, releaseDir } = await convertGtfs({
     gtfsDir, stagingDir, converterDir, pin, strategyPath, sourceId, releaseId, startDate, endDate, urlPrefix: prefix, regions,
-    license: config.license ?? undefined, rights: config.rights ?? undefined, memoryMb: options.memoryMb, allowUnpinned: options.allowUnpinned,
+    license: config.license ?? undefined, rights: config.rights ?? undefined, realtimePath, memoryMb: options.memoryMb, allowUnpinned: options.allowUnpinned,
   });
   const afterConversion = Date.now();
   const enrichment = await buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations: curated?.stations, platforms: reduced.platforms });
@@ -126,7 +135,10 @@ export async function buildSncb(options) {
       archive: { sha256: archive.sha256, byteLength: archive.byteLength },
       feed: { version: feed.version, publisher: feed.publisher, startDate: feed.start, endDate: feed.end },
       converter: { name: 'gtfs2lc', repository: pin.repository, branch: pin.branch, commit: converter.commit, pinnedCommit: pin.commit, version: converter.version, profile: pin.profile },
-    }, ...(curated ? [{
+    }, ...(realtime ? [{
+      id: 'gtfs-rt', description: 'GTFS Realtime TripUpdates republished by iRail from the open Belgian Mobility feed (NMBS/SNCB, CC BY 4.0); latest snapshot only',
+      license: 'https://creativecommons.org/licenses/by/4.0/', feeds: realtime.map((feed) => feed['@id']),
+    }] : []), ...(curated ? [{
       id: 'irail-stations', description: stationsPin.description, license: stationsPin.license,
       repository: stationsPin.repository, branch: stationsPin.branch, commit: curated.commit, pinnedCommit: stationsPin.commit,
       file: { path: stationsPin.file, sha256: curated.sha256, byteLength: curated.byteLength },
@@ -138,7 +150,7 @@ export async function buildSncb(options) {
       connections: 'available', stops: 'available', trips: 'available', routes: 'available', transfers: 'available',
       stopEnrichment: 'available', tripEnrichment: 'available', routeEnrichment: 'available',
       connectionEnrichment: 'unavailable', transferEnrichment: 'unavailable', shapes: 'unavailable',
-      realtime: 'unconfigured', compositions: 'unavailable', occupancy: 'unavailable', alerts: 'unavailable', stopStatus: 'unavailable', delaysCancellations: 'unavailable',
+      realtime: realtime ? 'available' : 'unconfigured', compositions: 'unavailable', occupancy: 'unavailable', alerts: 'unavailable', stopStatus: 'unavailable', delaysCancellations: 'unavailable',
     },
     diagnostics: {
       unsupportedGtfs: { frequencies, pathways },
@@ -171,11 +183,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     archive: { type: 'string' }, url: { type: 'string' }, 'gtfs-dir': { type: 'string' }, converter: { type: 'string' },
     work: { type: 'string' }, staging: { type: 'string' }, previous: { type: 'string' }, prefix: { type: 'string' },
     'start-date': { type: 'string' }, 'end-date': { type: 'string' }, 'days-back': { type: 'string' }, 'days-forward': { type: 'string' },
-    stations: { type: 'string' }, 'release-id': { type: 'string' }, regions: { type: 'string' }, 'memory-mb': { type: 'string' }, 'allow-unpinned': { type: 'boolean' },
+    stations: { type: 'string' }, realtime: { type: 'boolean' }, 'release-id': { type: 'string' }, regions: { type: 'string' }, 'memory-mb': { type: 'string' }, 'allow-unpinned': { type: 'boolean' },
   } });
   const number = (value) => (value === undefined ? undefined : Number(value));
   try {
     const result = await buildSncb({
+      realtime: values.realtime ? (await readJson(path.join(root, 'config/sncb.json'))).realtime.feeds : undefined,
       archive: values.archive, url: values.url, gtfsDir: values['gtfs-dir'], stationsDir: values.stations ?? process.env.STATIONS_DIR, converterDir: values.converter, workDir: values.work, stagingDir: values.staging,
       previousDir: values.previous, prefix: values.prefix, startDate: values['start-date'], endDate: values['end-date'],
       daysBack: number(values['days-back']), daysForward: number(values['days-forward']), releaseId: values['release-id'],

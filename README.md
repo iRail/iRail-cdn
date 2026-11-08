@@ -52,6 +52,10 @@ Use `GTFS2LC_DIR` or `--converter` for another checkout; an unpinned or modified
 
 **Not yet available** (declared `unavailable` in `irail.json`, not published as empty tables): shapes (the feed has no `shapes.txt`), `connectionEnrichment`, `transferEnrichment`, platform overrides from `stop_time_overrides.txt`, a licence IRI (rights text only), and every live overlay. Native Pages conformance (media types, CORS, caching) and an independent browser reading the deployed site are production acceptance steps that need a first deployment.
 
+## Live GTFS-RT (phase 2, first step)
+
+A small Cloudflare Worker ([src/gtfs-rt/](src/gtfs-rt/), [wrangler.worker.jsonc](wrangler.worker.jsonc)) republishes the open NMBS/SNCB GTFS-RT TripUpdates every 30 seconds as the latest snapshot at `https://cdn.routableconnections.com/realtime/gtfs-rt/trip-updates.pb`, straight from R2 through the CDN, within Cloudflare's free tier. Setup, credentials and the free-tier budget are in [docs/cloudflare-setup.md](docs/cloudflare-setup.md); all sources and products are in [specs/sources.md](specs/sources.md). The workflow [deploy-realtime.yml](.github/workflows/deploy-realtime.yml) deploys it. Once the live check passes, set `realtime.enabled` in [config/sncb.json](config/sncb.json) to link the feed from the timetable manifest. RIV, RSS and the real-time normalisation follow.
+
 ## Check
 
 Node 24 and a checkout of gtfs2lc at the pinned commit (see the local run above) are all that is needed; no credentials, Worker or Cloudflare tooling.
@@ -60,4 +64,4 @@ Node 24 and a checkout of gtfs2lc at the pinned commit (see the local run above)
 GTFS2LC_DIR=../gtfs2lc npm run check:planned
 ```
 
-This generates the synthetic contract fixtures and runs the contract tests, the SNCB identity tests and the offline end-to-end tests (fixture GTFS → converter → validation → Pages assembly/retention → static server → independent reader). Without a converter checkout the end-to-end tests are skipped; CI sets `REQUIRE_CONVERTER=1`.
+`npm run check` additionally typechecks and tests the GTFS-RT Worker (`npm run check:realtime`, no Cloudflare needed). `check:planned` generates the synthetic contract fixtures and runs the contract tests, the SNCB identity tests and the offline end-to-end tests (fixture GTFS → converter → validation → Pages assembly/retention → static server → independent reader). Without a converter checkout the end-to-end tests are skipped; CI sets `REQUIRE_CONVERTER=1`.

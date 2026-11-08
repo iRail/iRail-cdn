@@ -15,7 +15,7 @@ The generated fixtures and example reader implement these contracts. Production 
 | `stop-enrichment.arrow`, `trip-enrichment.arrow`, `route-enrichment.arrow` | Raw aliases, curated reference fields, agency and shape relationships | [Reference tables](reference.md) |
 | `connection-enrichment.arrow`, `transfer-enrichment.arrow` | Stable relationship IRIs and optional endpoint/shape enrichment | [iRail profile](irail-profile.md) |
 | `shapes.arrow`, `shapes/*.arrow` | Shape index and ordered polylines | [Shapes](shapes.md) |
-| `trip-updates.pb`, optional `delays-cancellations.arrow` | Original GTFS-RT and resolved updates | [Real-time](realtime.md) |
+| `trip-updates.pb`, optional `delays-cancellations.arrow` | Original GTFS-RT and resolved updates | [Real-time](realtime.md), [sources](sources.md) |
 | `compositions.arrow`, `occupancy.arrow` | Ordered units, observations and forecasts | [Compositions](compositions.md), [occupancy](enrichment.md#occupancyarrow) |
 | `alerts.arrow`, `alert-entities.arrow`, `stop-status.arrow` | Disturbances, associations and status | [Enrichment](enrichment.md) |
 | `/feed` | Twelve-hour Jelly-RDF LDES of observations | [Feed](ldes.md) |

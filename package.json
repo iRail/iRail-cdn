@@ -14,12 +14,21 @@
     "validate:release": "node scripts/validate-release.mjs",
     "serve:planned": "node scripts/serve-site.mjs build/site",
     "check:planned": "npm run fixtures && node --test --test-timeout=300000 test/contracts.test.mjs test/sncb-identity.test.mjs test/stop-reduction.test.mjs test/planned.test.mjs",
-    "check": "npm run check:planned"
+    "check": "npm run check:planned && npm run check:realtime",
+    "typecheck": "tsc -p tsconfig.worker.json",
+    "check:realtime": "npm run typecheck && node --test test/gtfs-rt.test.mjs",
+    "check:realtime:live": "node scripts/check-realtime.mjs https://cdn.routableconnections.com"
   },
   "dependencies": {
     "apache-arrow": "^21.0.0",
     "csv-parse": "^5.6.0",
     "csv-stringify": "^6.5.2",
     "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261108.1",
+    "@types/node": "^24.19.2",
+    "gtfs-realtime-bindings": "^2.0.0",
+    "typescript": "5.9"
   }
 }

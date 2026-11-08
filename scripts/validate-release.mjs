@@ -73,6 +73,14 @@ function checkManifest(manifest, { releaseId, prefix, expectedId, files, problem
     } catch (error) { problems.add(`${label}: ${error.message}`); }
     for (const forbidden of ['sha256', 'rowCount', 'byteLength', 'mediaType']) problems.check(page[forbidden] === undefined, `${label}: page must not contain ${forbidden}`);
   }
+  if (manifest.realtime !== undefined) {
+    const feeds = manifest.realtime;
+    problems.check(Array.isArray(feeds) && feeds.length > 0, `${label}: realtime must be a non-empty array`);
+    for (const feed of Array.isArray(feeds) ? feeds : []) {
+      problems.check(feed?.['@type'] === 'GtfsRealtimeFeed' && absoluteHttp(feed['@id']) && new URL(feed['@id']).protocol === 'https:', `${label}: realtime feed needs @type GtfsRealtimeFeed and an HTTPS @id`);
+      problems.check(typeof feed?.tripTemplate === 'string' && feed.tripTemplate.includes('{trip_id}'), `${label}: realtime feed needs a tripTemplate using {trip_id}`);
+    }
+  }
   const link = manifest[EXTENSION_PROPERTY]?.['@id'];
   problems.check(link === `${prefix}/releases/${releaseId}/${RELEASE_EXTENSIONS}`, `${label}: ${EXTENSION_PROPERTY} link is ${link}`);
   return connections.pages;
@@ -246,6 +254,7 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
   }
   problems.check((extensions.capabilities?.stations === 'available') === Boolean(extensions.files?.stations), 'stations capability and catalog disagree');
   problems.check((extensions.capabilities?.headsigns === 'available') === Boolean(extensions.files?.headsigns), 'headsigns capability and catalog disagree');
+  problems.check((extensions.capabilities?.realtime === 'available') === (manifest.realtime !== undefined), 'realtime capability and manifest link disagree');
   problems.check((extensions.capabilities?.platforms === 'available') === Boolean(extensions.files?.platforms), 'platforms capability and catalog disagree');
   if (tables.platforms) {
     // A platform is <station IRI>#<code> and hangs off exactly one core stop; the core itself holds stations only.

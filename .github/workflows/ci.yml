@@ -33,3 +33,4 @@ jobs:
         env:
           GTFS2LC_DIR: ${{ github.workspace }}/.gtfs2lc
           REQUIRE_CONVERTER: '1'
+      - run: npm run check:realtime
