@@ -50,7 +50,7 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.equal(a.rows.platforms, 4);
   assert.equal(a.rows.trips, 7);
   assert.equal(a.rows.transfers, 4);
-  assert.equal(a.rows.stations, 5);
+  assert.equal(a.rows.stations, 6, 'five curated stations plus one feed stop the curated list lacks');
   const manifest = await readJson(path.join(a.staging, 'manifest.jsonld'));
   assert.equal(manifest['@id'], `${PROJECT}/manifest.jsonld`);
   assert.equal(manifest.realtime, undefined, 'no provider live link until the live resources exist');
@@ -66,7 +66,7 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.deepEqual(extensions.diagnostics.headsigns, { distinct: 4, translated: { nl: 2, de: 1, en: 1 }, sourceLanguage: 'fr' });
   assert.deepEqual(extensions.sources.map((source) => source.id), ['gtfs-static', 'irail-stations']);
   assert.equal(extensions.sources[1].license, 'https://creativecommons.org/publicdomain/zero/1.0/');
-  assert.deepEqual(extensions.diagnostics.stations, { curated: 5, matchedInGtfs: 4, curatedNotInGtfs: 1, gtfsStationsWithoutCuratedEntry: 1 });
+  assert.deepEqual(extensions.diagnostics.stations, { curated: 5, matchedInGtfs: 4, curatedNotInGtfs: 1, addedFromGtfs: 1, skippedWithoutCoordinates: 0 });
   assert.deepEqual(extensions.diagnostics.stopReduction, { stations: 5, droppedParents: 4, platforms: 4, remappedTransfers: 2 });
   assert.equal(extensions.capabilities.platforms, 'available');
   assert.deepEqual(extensions.diagnostics.unsupportedGtfs, { frequencies: 0, pathways: 0 });
@@ -110,7 +110,16 @@ test('canonical iRail IRIs: a station is one stop, platforms hang off it by hash
   assert.equal(first.platformCode, '1');
   assert.equal(stops.getChild('iri').get(first.stopIdx), first.stationIri, 'platforms join to the core station row');
   const curated = rows(await load(dir, releaseFile(a.releaseId, 'stations.arrow')));
-  assert.equal(curated.length, 5);
+  assert.equal(curated.length, 6);
+  assert.deepEqual(curated.map((row) => row.source).sort(), ['gtfs', 'irail-stations', 'irail-stations', 'irail-stations', 'irail-stations', 'irail-stations']);
+  // A feed stop without a curated entry is added with whatever the feed can say about it.
+  const added = curated.find((row) => row.iri === abroad.iri);
+  assert.deepEqual({ ...added, avgStopTimes: undefined }, {
+    iri: 'http://irail.be/stations/NMBS/007099001', name: 'Fixture Abroad (GB)', alternativeFr: null, alternativeNl: null, alternativeDe: null, alternativeEn: null,
+    tafTapCode: null, telegraphCode: null, countryCode: 'GB', lat: 51.53, lon: -0.12, avgStopTimes: undefined, officialTransferTime: null, source: 'gtfs' });
+  assert.equal(added.avgStopTimes, 0.25, 'one run on one of the four service days of the release');
+  assert.equal(abroad.nameFr, 'Fixture Abroad (GB)');
+  assert.equal(abroad.avgStopTimes, 0.25);
   const curatedAlpha = curated.find((row) => row.iri === alpha.iri);
   assert.deepEqual([curatedAlpha.name, curatedAlpha.alternativeFr, curatedAlpha.alternativeNl, curatedAlpha.alternativeDe, curatedAlpha.alternativeEn], ['Fixture Alpha', null, 'Fixture Alfa', 'Fixture Alpha Hbf', 'Fixture Alpha Central']);
   assert.ok(curated.some((row) => row.iri.endsWith('008899099')), 'curated stations outside the feed are published too');
@@ -238,6 +247,7 @@ test('failed, oversized, mutated and conflicting builds leave the last good site
   // Identical inputs already published are reported as unchanged and skip the conversion.
   const unchanged = await buildSncb({ ...common, prefix: PROJECT, today: '20261109', gtfsDir: path.join(work, 'a', 'gtfs'), stagingDir: path.join(work, 'unchanged'), previousDir: siteA });
   assert.equal(unchanged.status, 'unchanged');
+  assert.equal(unchanged.releaseId, a.releaseId, 'the release id is a function of the inputs and the pipeline code');
 });
 
 test('validation rejects malformed references, schemas and catalog drift', { skip }, async () => {

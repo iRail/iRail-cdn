@@ -7,7 +7,7 @@ import { parse } from 'csv-parse/sync';
 import { tableFromIPC } from 'apache-arrow';
 import { createIriStrategy, IriRegistry } from '../../src/iri-strategy.ts';
 import { encodeRows } from './arrow.mjs';
-import { sha256 } from './util.mjs';
+import { sha256, walk } from './util.mjs';
 
 const NMBS_STOP_ID = /^(?:gs:nmbssncb:)?S?(\d{7})(?:_.*)?$/u; // the same pattern iRail uses (Stop.getHafasId)
 const STATION_ROOT = /^(?:S|00)?(\d{7})$/u; // the converter's verified-station pattern
@@ -20,6 +20,24 @@ async function csv(gtfsDir, name, { optional = false } = {}) {
     throw error;
   }
   return parse(text, { columns: true, bom: true, skip_empty_lines: true, relax_column_count: true });
+}
+
+/**
+ * Average number of distinct vehicle runs that call at each given stop per service day, from the release's own
+ * connections (a run counts once per day and stop whether it arrives, departs or both).
+ */
+async function runsPerDay(releaseDir, stopIdxs) {
+  const visits = new Map([...stopIdxs].map((idx) => [idx, new Set()]));
+  const days = new Set();
+  for (const file of (await walk(path.join(releaseDir, 'connections'))).filter((name) => name.endsWith('.arrow'))) {
+    const table = tableFromIPC(await readFile(path.join(releaseDir, 'connections', file)));
+    const [dep, arr, trip, day] = ['departureStopIdx', 'arrivalStopIdx', 'tripIdx', 'serviceDate'].map((name) => table.getChild(name).toArray());
+    for (let i = 0; i < table.numRows; i++) {
+      days.add(day[i]);
+      for (const stop of [dep[i], arr[i]]) visits.get(stop)?.add(`${trip[i]}/${day[i]}`);
+    }
+  }
+  return new Map([...visits].map(([idx, set]) => [idx, days.size ? Math.round((set.size / days.size) * 1e6) / 1e6 : null]));
 }
 
 const small = (value, max) => {
@@ -70,6 +88,33 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
 
   const curated = new Map((stations ?? []).map((station) => [station.iri, station]));
   const matched = new Set();
+  // Feed stops the curated list lacks still become stations, filled as far as the feed allows: names and
+  // translations from GTFS, country from the UIC prefix, coordinates from the stop and average runs per day from
+  // this release's connections. Codes and the official transfer time stay null: nothing in the feed states them.
+  const added = [];
+  let skippedWithoutCoordinates = 0;
+  if (stations) {
+    const missing = [];
+    for (let stopIdx = 0; stopIdx < stopsTable.numRows; stopIdx++) {
+      const iri = stopsTable.get(stopIdx).iri;
+      const stop = stopByIri.get(iri);
+      if (curated.has(iri) || stop.parent_station) continue;
+      if (stop.stop_lat === '' || stop.stop_lon === '' || stop.stop_lat === undefined) { skippedWithoutCoordinates++; continue; }
+      missing.push({ stopIdx, iri, stop });
+    }
+    const average = await runsPerDay(releaseDir, new Set(missing.map((entry) => entry.stopIdx)));
+    for (const { stopIdx, iri, stop } of missing) {
+      const hafas = NMBS_STOP_ID.exec(stop.stop_id)?.[1];
+      const alternative = (language) => { const value = localized(language, stop); return value && value !== stop.stop_name ? value : null; };
+      const row = {
+        iri, name: stop.stop_name, alternativeFr: null, alternativeNl: alternative('nl'), alternativeDe: alternative('de'), alternativeEn: alternative('en'),
+        tafTapCode: null, telegraphCode: null, countryCode: hafas ? UIC_COUNTRY[hafas.slice(0, 2)] ?? null : null,
+        lat: Number(stop.stop_lat), lon: Number(stop.stop_lon), avgStopTimes: average.get(stopIdx), officialTransferTime: null, source: 'gtfs',
+      };
+      added.push(row);
+      curated.set(iri, row);
+    }
+  }
   const stopRows = [];
   for (let stopIdx = 0; stopIdx < stopsTable.numRows; stopIdx++) {
     const core = stopsTable.get(stopIdx);
@@ -87,7 +132,7 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
     const hafas = NMBS_STOP_ID.exec(stop.stop_id)?.[1] ?? null;
     const stationIri = verified ? mint('station', { stops: { ...root, key: verified[1], uic: verified[1] } }, [verified[1]]) : stopMint(root);
     const station = curated.get(stationIri);
-    if (station) matched.add(stationIri);
+    if (station && station.source !== 'gtfs') matched.add(stationIri);
     const neutral = (alternative) => (station ? alternative ?? station.name : null);
     stopRows.push({
       stopIdx, stopId: stop.stop_id, regionIdx: null,
@@ -176,12 +221,12 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
   }
   let stationDiagnostics = null;
   if (stations) {
-    await writeFile(path.join(releaseDir, 'stations.arrow'), encodeRows('stations', stations, metadata));
-    outputs.stations = { file: 'stations.arrow', rowCount: stations.length };
-    const gtfsStations = new Set(stopRows.filter((row) => row.stationIri.startsWith(strategy.snapshot.bases?.stations ?? '\u0000')).map((row) => row.stationIri));
+    const all = [...stations, ...added].sort((a, b) => (a.iri < b.iri ? -1 : 1));
+    await writeFile(path.join(releaseDir, 'stations.arrow'), encodeRows('stations', all, metadata));
+    outputs.stations = { file: 'stations.arrow', rowCount: all.length };
     stationDiagnostics = {
       curated: stations.length, matchedInGtfs: matched.size, curatedNotInGtfs: stations.length - matched.size,
-      gtfsStationsWithoutCuratedEntry: [...gtfsStations].filter((iri) => !curated.has(iri)).length,
+      addedFromGtfs: added.length, skippedWithoutCoordinates,
     };
   }
   for (const [name, file, rows] of [['stopEnrichment', 'stop-enrichment.arrow', stopRows], ['tripEnrichment', 'trip-enrichment.arrow', tripRows], ['routeEnrichment', 'route-enrichment.arrow', routeRows]]) {

@@ -12,13 +12,15 @@ const event = [...run, field('stopSequence', 'Uint32')];
 const observation = [field('source', 'Utf8'), field('observedAt', 'Int64')];
 
 export const extensionDefinitions = {
-  // One row per curated station, including stations that are not in the GTFS feed. `name` is the neutral name;
-  // an empty alternative means the neutral name applies to that language.
+  // One row per station: the curated iRail stations (including ones outside the GTFS feed) plus best-effort rows for
+  // feed stops the curated list lacks (`source`). `name` is the neutral name; an empty alternative means the neutral
+  // name applies to that language.
   stations: [
     field('name', 'Utf8'),
     ...['alternativeFr', 'alternativeNl', 'alternativeDe', 'alternativeEn', 'tafTapCode', 'telegraphCode', 'countryCode'].map((name) => field(name, 'Utf8', true)),
     field('lat', 'Float64'), field('lon', 'Float64'),
     field('avgStopTimes', 'Float64', true), field('officialTransferTime', 'Uint32', true),
+    field('source', 'Utf8'),
   ],
   // Translations of `trips.headsign` (source language) from GTFS translations.txt, one row per distinct headsign.
   headsigns: [

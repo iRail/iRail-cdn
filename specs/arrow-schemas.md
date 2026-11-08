@@ -105,7 +105,7 @@ Schema metadata `dataset=headsigns`, `schemaVersion=1-alpha`, `releaseId=<static
 
 ## `stations.arrow`
 
-Schema metadata `dataset=stations`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table with `format=irail-cdn-extensions`. One row per curated station of [iRail/stations](https://github.com/iRail/stations) (CC0), including stations that are not in the timetable feed. It joins to `stopEnrichment.stationIri` and to the stations IRIs of external iRail data on `iri`.
+Schema metadata `dataset=stations`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table with `format=irail-cdn-extensions`. One row per station: every curated station of [iRail/stations](https://github.com/iRail/stations) (CC0), including stations that are not in the timetable feed, plus a best-effort row for each feed stop the curated list lacks. It joins to `stopEnrichment.stationIri` and to the stations IRIs of external iRail data on `iri`.
 
 | Position | Field | Arrow type | Nullable |
 | --- | --- | --- | --- |
@@ -121,9 +121,10 @@ Schema metadata `dataset=stations`, `schemaVersion=1-alpha`, `releaseId=<static 
 | 10 | `lon` | Float64 | no |
 | 11 | `avgStopTimes` | Float64 | yes |
 | 12 | `officialTransferTime` | Uint32 | yes |
-| 13 | `iri` | Utf8 | no |
+| 13 | `source` | Utf8 | no |
+| 14 | `iri` | Utf8 | no |
 
-`name` is the neutral name; a null alternative means the neutral name is used in that language. `countryCode` is upper-case ISO 3166-1 alpha-2.
+`name` is the neutral name; a null alternative means the neutral name is used in that language. `source` is `irail-stations` (curated) or `gtfs` (best effort for a feed stop the curated list lacks): the name comes from the feed's `stop_name`, Dutch/German/English alternatives from GTFS translations when they differ from it, `countryCode` from the UIC prefix, coordinates from the stop, and `avgStopTimes` is the number of distinct runs per service day calling there, counted from this release's connections. TAF/TAP code, telegraph code and `officialTransferTime` stay null: the feed does not state them. `countryCode` is upper-case ISO 3166-1 alpha-2.
 
 ## `stop-enrichment.arrow`
 

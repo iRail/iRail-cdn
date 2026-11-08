@@ -51,7 +51,7 @@ export async function readStations(directory, pin) {
       tafTapCode: text(row['taf-tap-code']), telegraphCode: text(row['telegraph-code']),
       countryCode: text(row['country-code'])?.toUpperCase() ?? null, lat, lon,
       avgStopTimes: text(row.avg_stop_times) === null ? null : number(row.avg_stop_times, 'avg_stop_times', uri),
-      officialTransferTime: transfer === null ? null : Number(transfer),
+      officialTransferTime: transfer === null ? null : Number(transfer), source: 'irail-stations',
     };
   });
   if (!stations.length) throw new Error('stations.csv has no stations');

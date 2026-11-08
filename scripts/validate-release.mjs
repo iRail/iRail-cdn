@@ -270,11 +270,19 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
     const { stations: curated, stopEnrichment } = tables;
     const seen = new Set();
     const iri = column(curated, 'iri'); const lat = numbers(curated, 'lat'); const lon = numbers(curated, 'lon'); const name = column(curated, 'name');
+    const source = column(curated, 'source');
     for (let i = 0; i < curated.numRows; i++) {
+      problems.check(['irail-stations', 'gtfs'].includes(source.get(i)), `stations[${i}] has an unknown source`);
       problems.check(/^http:\/\/irail\.be\/stations\/NMBS\/\d{9}$/u.test(iri.get(i)) && !seen.has(iri.get(i)), `stations[${i}] has an invalid or duplicate iri`);
       seen.add(iri.get(i));
       problems.check(name.get(i) && Math.abs(lat[i]) <= 90 && Math.abs(lon[i]) <= 180, `stations[${i}] has no name or invalid coordinates`);
     }
+    // Every core stop is a station: curated, or added from the feed unless its coordinates were missing.
+    const skipped = extensions.diagnostics?.stations?.skippedWithoutCoordinates ?? 0;
+    const stopIri = column(stops, 'iri');
+    let absent = 0;
+    for (let i = 0; i < stops.numRows; i++) if (!seen.has(stopIri.get(i))) absent++;
+    problems.check(absent === skipped, `${absent} core stops have no station row (${skipped} declared without coordinates)`);
     if (stopEnrichment) {
       // Every stop whose station is curated carries that station's names; none of them may be empty.
       const station = column(stopEnrichment, 'stationIri'); const fr = column(stopEnrichment, 'nameFr');

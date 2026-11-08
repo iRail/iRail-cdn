@@ -15,10 +15,17 @@ import { buildEnrichment } from './lib/enrich.mjs';
 import { finalizeRelease, releaseSize } from './lib/release.mjs';
 import { readStations, verifyStations } from './lib/stations.mjs';
 import { reduceToStations } from './lib/stops.mjs';
-import { addDays, brusselsDate, formatBytes, normalizePrefix, readJson, sha256File } from './lib/util.mjs';
+import { addDays, brusselsDate, formatBytes, normalizePrefix, readJson, sha256File, walk } from './lib/util.mjs';
 import { validateRelease } from './validate-release.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+/** Fingerprint of the code and contracts that shape the output: a pipeline change must not reuse a release id. */
+async function pipelineFingerprint() {
+  const files = ['scripts/build-sncb.mjs', 'scripts/convert-gtfs.mjs', 'specs/schemas.mjs', 'specs/lc-core-schemas.json', ...(await walk(path.join(root, 'scripts/lib'))).map((name) => `scripts/lib/${name}`)];
+  const hash = createHash('sha256');
+  for (const file of files) hash.update(file).update(await readFile(path.join(root, file)));
+  return hash.digest('hex');
+}
 const sha8 = (...parts) => createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 8);
 
 export async function downloadArchive(url, file, { fetcher = fetch, maxBytes = 1_000_000_000 } = {}) {
@@ -95,7 +102,7 @@ export async function buildSncb(options) {
   if (feed.end && endDate > feed.end) endDate = feed.end;
   if (startDate > endDate) throw new Error(`The feed (${feed.start}..${feed.end}) does not cover the requested horizon ${startDate}..${endDate}`);
   const regions = options.regions ?? config.regions;
-  const inputs = sha8(archive.sha256 ?? feed.version, pin.commit, curated?.sha256 ?? null, strategyConfig, startDate, endDate, regions, prefix);
+  const inputs = sha8(archive.sha256 ?? feed.version, await pipelineFingerprint(), pin.commit, curated?.sha256 ?? null, strategyConfig, startDate, endDate, regions, prefix);
   const releaseId = options.releaseId ?? `${sourceId.replace(/^[a-z]+\./u, '')}-${today}-${inputs}`;
 
   if (options.previousDir) {
