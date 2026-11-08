@@ -5,6 +5,12 @@ import { createIriStrategy } from '../src/identifiers.ts';
 test('be.sncb keeps the iRail API IRIs for stations and vehicles and a unique namespace for runs and connections', () => {
   const sncb = createIriStrategy('be.sncb');
   assert.equal(sncb.mint('station', { stops: { key: '8814001', uic: '8814001' } }, ['8814001']), 'http://irail.be/stations/NMBS/008814001');
+  // The station-level stop is the station: one identifier, the one iRail already uses.
+  // (A registry refuses to mint one IRI under two logical kinds, so this uses a second strategy.)
+  const stops = createIriStrategy('be.sncb');
+  assert.equal(stops.mint('stop', { stops: { key: '8814001' } }, ['8814001']), 'http://irail.be/stations/NMBS/008814001');
+  assert.equal(stops.mint('stop', { stops: { key: '7015400' } }, ['7015400']), 'http://irail.be/stations/NMBS/007015400');
+  assert.throws(() => stops.mint('station', { stops: { key: '8814001', uic: '8814001' } }, ['8814001']), /IRI collision/);
   const context = { vehicle: { key: 'IC5130' }, routes: { route_short_name: 'IC' }, trips: { trip_short_name: '5130' } };
   assert.equal(sncb.mint('vehicle', context, ['IC5130']), 'http://irail.be/vehicle/IC5130');
   // Other sources get an ordinary namespaced vehicle IRI from the global template.

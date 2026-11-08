@@ -44,7 +44,16 @@ A run is dated using the original service date, including after-midnight events.
 
 ## `be.sncb` IRIs in the production build
 
-[config/sources.json](../config/sources.json) takes these IRIs from the iRail API (`be.irail.api.util.IrailUri`, `LinkedConnectionsService`, `Stop.getHafasId`): stations `http://irail.be/stations/NMBS/00<hafas>` (verified station parents only), vehicles `http://irail.be/vehicle/<route short name><trip short name>`. Runs, calls, connections, trips, routes, stops and agencies stay under `https://irail.be/id/be.sncb/`. The API's historical connection IRI `http://irail.be/connections/<hafas>/<departure date>/<vehicle>` and vehicle run IRI `http://irail.be/vehicle/<vehicle>/<date>` are **not** minted as entity IRIs: the 7 November 2026 feed has several scheduled trips with the same vehicle number on one day (IC 5130 from Bruxelles-Midi, for instance), and the registry rejects the resulting collision. The vehicle IRI is exposed as `tripEnrichment.vehicleIri`, where it can be shared by several trips. Minting `be.sncb` `vehicle`, `run` or `connection` IRIs needs dictionary context (route/trip short names); collectors obtain it from the pinned release rather than from the key alone.
+[config/sources.json](../config/sources.json) takes the identifiers from the iRail API (`be.irail.api.util.IrailUri`, `LinkedConnectionsService`, `Stop.getHafasId`) and keeps one identifier per concept:
+
+| Concept | IRI |
+| --- | --- |
+| Station (and its station-level stop, which is what connections use) | `http://irail.be/stations/NMBS/00<hafas>`, e.g. `…/008892007`; foreign stops too (`…/007015400`) |
+| Platform | `<station IRI>#<platform code>`, e.g. `http://irail.be/stations/NMBS/008892007#10`; extension `platforms.arrow` |
+| Vehicle | `http://irail.be/vehicle/<label><number>`, in `tripEnrichment.vehicleIri` |
+| Trip, route, run, connection | `https://irail.be/id/be.sncb/trips/…`, `/routes/…`, `/runs/<trip>/<date>`, `/runs/<trip>/<date>/connections/<sequence>` |
+
+The GTFS has three stop rows per station (`S8892007` parent, `8892007`, `8892007_10` platform). Only the station-level row is a core stop; the other two are removed before conversion and do not get identifiers, so there are no `…/stops/S…` or `…/stops/<uic>_<platform>` IRIs. The `stop` and `station` templates therefore produce the same IRI. Platforms use a fragment, which the converter's identity strategy cannot mint, so they are created by the iRail extension and always derive from the station IRI. The API's historical connection IRI `http://irail.be/connections/<hafas>/<departure date>/<vehicle>` and vehicle run IRI `http://irail.be/vehicle/<vehicle>/<date>` are **not** minted as entity IRIs: the 7 November 2026 feed has several scheduled trips with the same vehicle number on one day (IC 5130 from Bruxelles-Midi, for instance) and the registry rejects the collision. Minting `be.sncb` `vehicle`, `run` or `connection` IRIs needs dictionary context (route/trip short names); collectors obtain it from the pinned release rather than from the key alone.
 
 ## Configuration and expansion
 

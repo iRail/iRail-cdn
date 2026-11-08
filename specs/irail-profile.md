@@ -14,6 +14,7 @@ The extension manifest, catalog and all static extension files are pinned to the
 
 | Dataset | Data beyond LC |
 | --- | --- |
+| `platforms` | Platforms of a station as `<station IRI>#<platform code>`; the core has no platform or parent-station rows |
 | `headsigns` | Translations of `trips.headsign` from GTFS `translations.txt` (nl/de/en; the core keeps the source-language text) |
 | `stations` | Curated station list in all languages (iRail/stations): names, alternatives, TAF/TAP and telegraph codes, country, coordinates, average stops, official transfer time |
 | `stopEnrichment` | Raw `stopId`, optional local region alias, station identity/codes, multilingual names, platform, transfer provenance and accessibility |

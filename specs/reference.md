@@ -10,6 +10,8 @@ The LC order is `name`, `lat`, `lon`, `parentIdx`, `minTransferTime`, `iri`, `re
 
 `stop-enrichment.arrow` joins through `stopIdx` and the identical `iri`. It preserves raw `stopId`, optional numeric `regionIdx` alias, `stationIri`, `stationId`, `hafasId`, localized `nameNl/nameFr/nameDe/nameEn`, country/TAF-TAP/telegraph codes, `platformCode`, `officialTransferTime`, `avgStopTimes`, `wheelchairBoarding` and nullable `parentIri`. A region number is not an LC partition identifier. Preserve leading zeros in codes, official transfer-time units/provenance and the original station statistic's meaning.
 
+**SNCB.** The core table has exactly one stop per station and its `iri` is the iRail station IRI (`http://irail.be/stations/NMBS/00<hafas>`, also for the foreign stops of the feed); `parentIdx` is −1 everywhere. The feed's `S<uic>` parent rows and `<uic>_<platform>` rows are removed from the disposable GTFS copy before conversion (`scripts/lib/stops.mjs`); no connection or transfer uses them. Platforms are in `platforms.arrow` as `<station IRI>#<platform>`. Platform- or parent-level transfers would collapse to their station, keeping the longest buffer.
+
 Do not invent platforms by trimming raw IDs or apply blanket zero transfer times. The demo uses 120 seconds and has no real-world station mapping. Use the [verified SNCB station identity rules](identifiers.md); international or platform IDs do not automatically use SNCB padding.
 
 ## `trips.arrow`

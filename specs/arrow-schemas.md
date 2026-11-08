@@ -73,6 +73,23 @@ Schema metadata `dataset=transfers`, `schemaVersion=2-alpha`, and `releaseId=<st
 | 7 | `fromRouteIdx` | Int32 | yes |
 | 8 | `toRouteIdx` | Int32 | yes |
 
+## `platforms.arrow`
+
+Schema metadata `dataset=platforms`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table; the SNCB core `stops` table has one row per station, so platforms exist only here.
+
+| Position | Field | Arrow type | Nullable |
+| --- | --- | --- | --- |
+| 1 | `stopIdx` | Int32 | no |
+| 2 | `stopId` | Utf8 | no |
+| 3 | `platformCode` | Utf8 | no |
+| 4 | `lat` | Float64 | yes |
+| 5 | `lon` | Float64 | yes |
+| 6 | `wheelchairBoarding` | Uint8 | yes |
+| 7 | `iri` | Utf8 | no |
+| 8 | `stationIri` | Utf8 | no |
+
+`iri` is `<station IRI>#<platformCode>` (the code percent-encoded once), for example `http://irail.be/stations/NMBS/008892007#10`. It is a fragment of the station IRI, so it dereferences to the station. `stopIdx` is the station's row in core `stops`, `stationIri` equals that row's `iri`, and `stopId` is the raw GTFS platform stop (`8892007_10`).
+
 ## `headsigns.arrow`
 
 Schema metadata `dataset=headsigns`, `schemaVersion=1-alpha`, `releaseId=<static release>`. iRail side table, built from GTFS `translations.txt` (`trips` / `trip_headsign`, keyed by the source-language text). One row per distinct `trips.headsign`; look a trip's headsign up by exact match.

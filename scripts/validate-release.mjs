@@ -127,7 +127,7 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
 
   // Core dictionaries.
   const tables = {};
-  for (const name of [...CORE_TABLES, 'stopEnrichment', 'tripEnrichment', 'routeEnrichment', ...(extensions.files?.stations ? ['stations'] : []), ...(extensions.files?.headsigns ? ['headsigns'] : [])]) {
+  for (const name of [...CORE_TABLES, 'stopEnrichment', 'tripEnrichment', 'routeEnrichment', ...(extensions.files?.stations ? ['stations'] : []), ...(extensions.files?.headsigns ? ['headsigns'] : []), ...(extensions.files?.platforms ? ['platforms'] : [])]) {
     const descriptor = extensions.files?.[name];
     if (!problems.check(descriptor && !Array.isArray(descriptor), `catalog has no ${name} descriptor`)) continue;
     const relative = sitePath(descriptor.path, prefix);
@@ -246,6 +246,19 @@ export async function validateRelease(siteDir, releaseId, { prefix = '', deep = 
   }
   problems.check((extensions.capabilities?.stations === 'available') === Boolean(extensions.files?.stations), 'stations capability and catalog disagree');
   problems.check((extensions.capabilities?.headsigns === 'available') === Boolean(extensions.files?.headsigns), 'headsigns capability and catalog disagree');
+  problems.check((extensions.capabilities?.platforms === 'available') === Boolean(extensions.files?.platforms), 'platforms capability and catalog disagree');
+  if (tables.platforms) {
+    // A platform is <station IRI>#<code> and hangs off exactly one core stop; the core itself holds stations only.
+    const { platforms } = tables;
+    const stopIdx = numbers(platforms, 'stopIdx'); const iri = column(platforms, 'iri'); const station = column(platforms, 'stationIri'); const code = column(platforms, 'platformCode');
+    const stopIri = column(stops, 'iri'); const seen = new Set();
+    for (let i = 0; i < platforms.numRows; i++) {
+      const ok = stopIdx[i] >= 0 && stopIdx[i] < stops.numRows && station.get(i) === stopIri.get(stopIdx[i]) && iri.get(i) === `${station.get(i)}#${encodeURIComponent(code.get(i))}` && !seen.has(iri.get(i));
+      if (!problems.check(ok, `platforms[${i}] is not a unique <station IRI>#<platform> of its core stop`)) break;
+      seen.add(iri.get(i));
+    }
+    for (let i = 0; i < stops.numRows; i++) if (parent[i] !== -1) { problems.add('stops must be station-level when platforms are published separately'); break; }
+  }
   if (tables.headsigns) {
     // One row per distinct trip headsign: a client can translate any trips.headsign by exact match.
     const have = new Set(column(tables.headsigns, 'headsign').toArray());

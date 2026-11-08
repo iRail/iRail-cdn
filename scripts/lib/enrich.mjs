@@ -41,10 +41,11 @@ function indexByIri(table, raw, mintFor, kind) {
 }
 
 /**
+ * @param {Array<object>} [platforms] platform stops removed from the core by scripts/lib/stops.mjs; published as `platforms.arrow`
  * @param {Array<object>} [stations] curated rows from scripts/lib/stations.mjs. They override GTFS names, codes and
  *   transfer data for every stop whose station IRI is one of them, and are published once more as `stations.arrow`.
  */
-export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations }) {
+export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations, platforms }) {
   const strategy = createIriStrategy(sourceId, strategyConfig, new IriRegistry());
   const { mint } = strategy;
   const read = async (name) => tableFromIPC(await readFile(path.join(releaseDir, `${name}.arrow`)));
@@ -149,8 +150,24 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
   }
   const headsigns = [...headsignRows.values()].sort((a, b) => (a.headsign < b.headsign ? -1 : 1));
 
+  const stopIdxById = new Map(stopRows.map((row) => [row.stopId, row.stopIdx]));
+  const platformRows = (platforms ?? []).map((platform) => {
+    const stopIdx = stopIdxById.get(platform.stationStopId);
+    if (stopIdx === undefined) throw new Error(`Platform ${platform.stopId} has no station ${platform.stationStopId} in the release`);
+    const stationIri = stopRows[stopIdx].iri;
+    return {
+      stopIdx, stopId: platform.stopId, platformCode: platform.platformCode, lat: platform.lat, lon: platform.lon,
+      wheelchairBoarding: platform.wheelchairBoarding, iri: `${stationIri}#${encodeURIComponent(platform.platformCode)}`, stationIri,
+    };
+  });
+  if (new Set(platformRows.map((row) => row.iri)).size !== platformRows.length) throw new Error('Two platforms share an identifier');
+
   const metadata = { releaseId };
   const outputs = {};
+  if (platformRows.length) {
+    await writeFile(path.join(releaseDir, 'platforms.arrow'), encodeRows('platforms', platformRows, metadata));
+    outputs.platforms = { file: 'platforms.arrow', rowCount: platformRows.length };
+  }
   let headsignDiagnostics = null;
   if (headsignTranslations.length) {
     await writeFile(path.join(releaseDir, 'headsigns.arrow'), encodeRows('headsigns', headsigns, metadata));

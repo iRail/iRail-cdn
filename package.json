@@ -13,12 +13,13 @@
     "assemble:pages": "node scripts/assemble-pages.mjs",
     "validate:release": "node scripts/validate-release.mjs",
     "serve:planned": "node scripts/serve-site.mjs build/site",
-    "check:planned": "npm run fixtures && node --test --test-timeout=300000 test/contracts.test.mjs test/sncb-identity.test.mjs test/planned.test.mjs",
+    "check:planned": "npm run fixtures && node --test --test-timeout=300000 test/contracts.test.mjs test/sncb-identity.test.mjs test/stop-reduction.test.mjs test/planned.test.mjs",
     "check": "npm run check:planned"
   },
   "dependencies": {
     "apache-arrow": "^21.0.0",
     "csv-parse": "^5.6.0",
+    "csv-stringify": "^6.5.2",
     "fflate": "^0.8.2"
   }
 }

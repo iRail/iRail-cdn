@@ -46,7 +46,8 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.equal(a.status, 'built');
   assert.match(a.releaseId, /^sncb-20261109-[0-9a-f]{8}$/);
   assert.equal(a.rows.connections, 19);
-  assert.equal(a.rows.stops, 13);
+  assert.equal(a.rows.stops, 5, 'one core stop per station');
+  assert.equal(a.rows.platforms, 4);
   assert.equal(a.rows.trips, 7);
   assert.equal(a.rows.transfers, 4);
   assert.equal(a.rows.stations, 5);
@@ -65,41 +66,54 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.deepEqual(extensions.diagnostics.headsigns, { distinct: 4, translated: { nl: 2, de: 1, en: 1 }, sourceLanguage: 'fr' });
   assert.deepEqual(extensions.sources.map((source) => source.id), ['gtfs-static', 'irail-stations']);
   assert.equal(extensions.sources[1].license, 'https://creativecommons.org/publicdomain/zero/1.0/');
-  assert.deepEqual(extensions.diagnostics.stations, { curated: 5, matchedInGtfs: 4, curatedNotInGtfs: 1, gtfsStationsWithoutCuratedEntry: 0 });
+  assert.deepEqual(extensions.diagnostics.stations, { curated: 5, matchedInGtfs: 4, curatedNotInGtfs: 1, gtfsStationsWithoutCuratedEntry: 1 });
+  assert.deepEqual(extensions.diagnostics.stopReduction, { stations: 5, droppedParents: 4, platforms: 4, remappedTransfers: 2 });
+  assert.equal(extensions.capabilities.platforms, 'available');
   assert.deepEqual(extensions.diagnostics.unsupportedGtfs, { frequencies: 0, pathways: 0 });
   assert.equal(extensions.sources[0].converter.commit, extensions.sources[0].converter.pinnedCommit);
   assert.equal(extensions.files.connections.length, manifest.connections.pages.length);
 });
 
-test('canonical iRail IRIs: SNCB stations and vehicles are preserved, runs and connections stay unique', { skip }, async () => {
+test('canonical iRail IRIs: a station is one stop, platforms hang off it by hash, runs and connections stay unique', { skip }, async () => {
   const dir = a.staging;
   const stops = await load(dir, releaseFile(a.releaseId, 'stops.arrow'));
+  const stopIris = [...stops.getChild('iri').toArray()];
+  assert.deepEqual(stopIris.sort(), ['http://irail.be/stations/NMBS/007099001', 'http://irail.be/stations/NMBS/008899001', 'http://irail.be/stations/NMBS/008899002', 'http://irail.be/stations/NMBS/008899003', 'http://irail.be/stations/NMBS/008899004']);
+  assert.ok([...stops.getChild('parentIdx').toArray()].every((parent) => parent === -1), 'no parent stations or platform rows in the core');
   const stopExtra = rows(await load(dir, releaseFile(a.releaseId, 'stop-enrichment.arrow')));
-  const platform = stopExtra.find((row) => row.stopId === '8899001_1');
-  assert.equal(platform.stationIri, 'http://irail.be/stations/NMBS/008899001');
-  assert.equal(platform.stationId, '008899001');
-  assert.equal(platform.hafasId, '8899001');
-  assert.equal(platform.platformCode, '1');
-  assert.equal(platform.nameNl, 'Fixture Alfa');
-  assert.equal(platform.nameFr, 'Fixture Alpha', 'an empty alternative means the neutral name applies');
-  assert.equal(platform.nameDe, 'Fixture Alpha Hbf');
-  assert.equal(platform.nameEn, 'Fixture Alpha Central');
-  assert.equal(platform.tafTapCode, 'BE99001');
-  assert.equal(platform.telegraphCode, 'FXA');
-  assert.equal(platform.officialTransferTime, 300);
-  assert.equal(platform.avgStopTimes, 120.5);
-  assert.equal(platform.countryCode, 'BE');
+  const alpha = stopExtra.find((row) => row.stopId === '8899001');
+  assert.equal(alpha.iri, 'http://irail.be/stations/NMBS/008899001');
+  assert.equal(alpha.stationIri, alpha.iri, 'the stop is the station');
+  assert.equal(alpha.stationId, '008899001');
+  assert.equal(alpha.hafasId, '8899001');
+  assert.equal(alpha.platformCode, null);
+  assert.equal(alpha.parentIri, null);
+  assert.equal(alpha.nameNl, 'Fixture Alfa');
+  assert.equal(alpha.nameFr, 'Fixture Alpha', 'an empty alternative means the neutral name applies');
+  assert.equal(alpha.nameDe, 'Fixture Alpha Hbf');
+  assert.equal(alpha.nameEn, 'Fixture Alpha Central');
+  assert.equal(alpha.tafTapCode, 'BE99001');
+  assert.equal(alpha.telegraphCode, 'FXA');
+  assert.equal(alpha.officialTransferTime, 300);
+  assert.equal(alpha.avgStopTimes, 120.5);
+  assert.equal(alpha.countryCode, 'BE');
+  const abroad = stopExtra.find((row) => row.stopId === '7099001');
+  assert.equal(abroad.iri, 'http://irail.be/stations/NMBS/007099001');
+  assert.equal(abroad.countryCode, 'GB');
+  const platforms = rows(await load(dir, releaseFile(a.releaseId, 'platforms.arrow')));
+  assert.deepEqual(platforms.map((row) => row.iri), [
+    'http://irail.be/stations/NMBS/008899001#1', 'http://irail.be/stations/NMBS/008899001#2',
+    'http://irail.be/stations/NMBS/008899002#1', 'http://irail.be/stations/NMBS/008899002#2']);
+  const first = platforms[0];
+  assert.equal(first.stationIri, alpha.iri);
+  assert.equal(first.stopId, '8899001_1');
+  assert.equal(first.platformCode, '1');
+  assert.equal(stops.getChild('iri').get(first.stopIdx), first.stationIri, 'platforms join to the core station row');
   const curated = rows(await load(dir, releaseFile(a.releaseId, 'stations.arrow')));
   assert.equal(curated.length, 5);
-  const alpha = curated.find((row) => row.iri === 'http://irail.be/stations/NMBS/008899001');
-  assert.deepEqual([alpha.name, alpha.alternativeFr, alpha.alternativeNl, alpha.alternativeDe, alpha.alternativeEn], ['Fixture Alpha', null, 'Fixture Alfa', 'Fixture Alpha Hbf', 'Fixture Alpha Central']);
+  const curatedAlpha = curated.find((row) => row.iri === alpha.iri);
+  assert.deepEqual([curatedAlpha.name, curatedAlpha.alternativeFr, curatedAlpha.alternativeNl, curatedAlpha.alternativeDe, curatedAlpha.alternativeEn], ['Fixture Alpha', null, 'Fixture Alfa', 'Fixture Alpha Hbf', 'Fixture Alpha Central']);
   assert.ok(curated.some((row) => row.iri.endsWith('008899099')), 'curated stations outside the feed are published too');
-  assert.equal(platform.parentIri, stops.getChild('iri').get(stops.getChild('iri').toArray().findIndex((iri) => iri.endsWith('/stops/S8899001'))));
-  assert.equal(stopExtra.find((row) => row.stopId === 'S8899002').stationIri, 'http://irail.be/stations/NMBS/008899002');
-  const abroad = stopExtra.find((row) => row.stopId === '7099001');
-  assert.equal(abroad.countryCode, 'GB');
-  assert.equal(abroad.stationIri, abroad.iri, 'an unverified stop is its own station');
-  assert.equal(stops.getChild('iri').get(0).startsWith('https://irail.be/id/be.sncb/stops/'), true);
   const headsigns = rows(await load(dir, releaseFile(a.releaseId, 'headsigns.arrow')));
   assert.deepEqual(headsigns.map((row) => row.headsign), ['Abroad', 'Bravo', 'Charlie', 'Delta']);
   const charlie = headsigns.find((row) => row.headsign === 'Charlie');
@@ -153,7 +167,7 @@ test('the curated stations source is optional, pinned and strictly parsed', { sk
   assert.equal(extensions.files.stations, undefined);
   assert.deepEqual(extensions.sources.map((source) => source.id), ['gtfs-static']);
   assert.notEqual(without.releaseId, a.releaseId);
-  const stopRow = rows(await load(without.staging, releaseFile(without.releaseId, 'stop-enrichment.arrow'))).find((row) => row.stopId === '8899001_1');
+  const stopRow = rows(await load(without.staging, releaseFile(without.releaseId, 'stop-enrichment.arrow'))).find((row) => row.stopId === '8899001');
   assert.equal(stopRow.nameNl, 'Fixture Alfa', 'GTFS translations still apply without the curated source');
   assert.equal(stopRow.tafTapCode, null);
   // Only the pinned commit is accepted for production builds.
@@ -254,7 +268,7 @@ test('an independent core-only reader plans from static files at a project path 
   await withServer(siteB, PROJECT, async (origin, requested) => {
     const { manifest, stops, connections, trips } = await readTimetable(`${origin}${PROJECT}/`);
     assert.equal(manifest.releaseId, b.releaseId);
-    const stopIdx = (suffix) => stops.findIndex((stop) => stop.iri.endsWith(`/stops/${suffix}`));
+    const stopIdx = (suffix) => stops.findIndex((stop) => stop.iri === `http://irail.be/stations/NMBS/00${suffix}`);
     // At 08:00 Brussels the through train departs Alpha and arrives at Charlie at 08:25 (07:25 UTC).
     const result = earliestArrival(connections, stops, stopIdx('8899001'), stopIdx('8899003'), Date.parse('2026-11-09T07:00:00Z') / 1000);
     assert.equal(new Date(result.time * 1000).toISOString(), '2026-11-09T07:25:00.000Z');
@@ -281,7 +295,7 @@ test('domain-root hosting uses the same bytes layout and prefix-free IRIs', { sk
     assert.equal(manifest['@id'], '/manifest.jsonld');
     assert.equal(manifest.stops, `/releases/${root1.releaseId}/stops.arrow`);
     assert.equal(connections.length, 19);
-    assert.ok(stops.length > 0);
+    assert.equal(stops.length, 5);
   });
   const projectStops = await load(a.staging, releaseFile(a.releaseId, 'stops.arrow'));
   const rootStops = await load(site, releaseFile(root1.releaseId, 'stops.arrow'));

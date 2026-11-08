@@ -41,12 +41,18 @@
       },
       "templates": {
         "station": "{bases.stations}/{stationCode}",
-        "vehicle": "{bases.vehicles}/{vehicleId}"
+        "vehicle": "{bases.vehicles}/{vehicleId}",
+        "stop": "{bases.stations}/{stationCode}"
       },
       "resolve": {
         "stationCode": {
           "padStart": {
-            "value": "stops.uic",
+            "value": {
+              "coalesce": [
+                "stops.uic",
+                "stops.key"
+              ]
+            },
             "length": 9,
             "fill": "0"
           }
@@ -58,7 +64,7 @@
           ]
         }
       },
-      "notes": "One logical namespace across collection channels. Stations keep the iRail API IRI http://irail.be/stations/NMBS/00<hafas>, and vehicles http://irail.be/vehicle/<label><number>. Runs, calls and connections stay under https://irail.be/id/be.sncb/: the GTFS contains several scheduled trips with the same vehicle number on the same day, so vehicle/date and legacy connection IRIs are not unique."
+      "notes": "One logical namespace across collection channels. A station and its station-level stop are the same thing: http://irail.be/stations/NMBS/00<hafas>, the identifier iRail already uses (stop and station templates agree). Platforms are not stops of the routing core; they are identified in an extension as <station IRI>#<platform>. Vehicles are http://irail.be/vehicle/<label><number>. Runs, calls, connections, trips and routes stay under https://irail.be/id/be.sncb/: the GTFS contains several scheduled trips with the same vehicle number on the same day, so vehicle/date and legacy connection IRIs are not unique."
     },
     "demo.fixture": {
       "name": "Synthetic fixtures",

@@ -25,6 +25,11 @@ export const extensionDefinitions = {
     field('headsign', 'Utf8'),
     ...['translationNl', 'translationDe', 'translationEn'].map((name) => field(name, 'Utf8', true)),
   ],
+  // Platforms of the SNCB stations. Core `stops` has one row per station; a platform is <station IRI>#<platform code>.
+  platforms: [
+    field('stopIdx', 'Int32'), field('stopId', 'Utf8'), field('platformCode', 'Utf8'),
+    field('lat', 'Float64', true), field('lon', 'Float64', true), field('wheelchairBoarding', 'Uint8', true),
+  ],
   stopEnrichment: [
     field('stopIdx', 'Int32'), field('stopId', 'Utf8'), field('regionIdx', 'Int32', true),
     field('stationIri', 'Utf8', true), field('stationId', 'Utf8', true), field('hafasId', 'Utf8', true),
@@ -88,6 +93,7 @@ export const extensionDefinitions = {
 const iriFields = {
   connectionEnrichment: ['iri', 'tripIri', 'runIri', 'departureStopIri', 'arrivalStopIri', 'departureCallIri', 'arrivalCallIri'],
   stations: ['iri'],
+  platforms: ['iri', 'stationIri'],
   stopEnrichment: ['iri'],
   tripEnrichment: ['iri', 'routeIri'],
   routeEnrichment: ['iri', 'agencyIri'],

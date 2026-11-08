@@ -14,6 +14,7 @@ import { convertGtfs, extractArchive, verifyConverter } from './convert-gtfs.mjs
 import { buildEnrichment } from './lib/enrich.mjs';
 import { finalizeRelease, releaseSize } from './lib/release.mjs';
 import { readStations, verifyStations } from './lib/stations.mjs';
+import { reduceToStations } from './lib/stops.mjs';
 import { addDays, brusselsDate, formatBytes, normalizePrefix, readJson, sha256File } from './lib/util.mjs';
 import { validateRelease } from './validate-release.mjs';
 
@@ -82,6 +83,8 @@ export async function buildSncb(options) {
     archive = await extractArchive(file, gtfsDir);
     archive.sha256 = await sha256File(file);
   }
+  // One stop per station in the core; platforms become the `platforms` extension (see scripts/lib/stops.mjs).
+  const reduced = await reduceToStations(gtfsDir);
   const feed = await feedWindow(gtfsDir);
   const today = options.today ?? brusselsDate();
   const horizon = config.horizon;
@@ -106,7 +109,7 @@ export async function buildSncb(options) {
     license: config.license ?? undefined, rights: config.rights ?? undefined, memoryMb: options.memoryMb, allowUnpinned: options.allowUnpinned,
   });
   const afterConversion = Date.now();
-  const enrichment = await buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations: curated?.stations });
+  const enrichment = await buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations: curated?.stations, platforms: reduced.platforms });
   const frequencies = await countRows(gtfsDir, 'frequencies.txt');
   const pathways = await countRows(gtfsDir, 'pathways.txt');
   const finalized = await finalizeRelease({
@@ -124,6 +127,7 @@ export async function buildSncb(options) {
     capabilities: {
       stations: curated ? 'available' : 'unavailable',
       headsigns: enrichment.outputs.headsigns ? 'available' : 'unavailable',
+      platforms: enrichment.outputs.platforms ? 'available' : 'unavailable',
       connections: 'available', stops: 'available', trips: 'available', routes: 'available', transfers: 'available',
       stopEnrichment: 'available', tripEnrichment: 'available', routeEnrichment: 'available',
       connectionEnrichment: 'unavailable', transferEnrichment: 'unavailable', shapes: 'unavailable',
@@ -131,10 +135,12 @@ export async function buildSncb(options) {
     },
     diagnostics: {
       unsupportedGtfs: { frequencies, pathways },
+      stopReduction: { stations: reduced.stations, droppedParents: reduced.dropped.parents, platforms: reduced.dropped.platforms, remappedTransfers: reduced.remappedTransfers },
       ...(enrichment.headsignDiagnostics ? { headsigns: enrichment.headsignDiagnostics } : {}),
       ...(enrichment.stationDiagnostics ? { stations: enrichment.stationDiagnostics } : {}),
       notes: [
         'The source feed has no shapes.txt content; shapes stay unavailable rather than being inferred from station pairs.',
+        'The core stops table has one stop per station (its IRI is the iRail station IRI); GTFS parent stations and platform stops are not core rows. Platforms are published in platforms.arrow as <station IRI>#<platform code>.',
         'Connection IRIs use the stable https://irail.be/id/be.sncb/ namespace: several scheduled trips share a vehicle number on one day, so legacy vehicle/date connection IRIs are not unique.',
         'stop_time_overrides.txt (platform overrides) is not read by the converter and is not yet published.',
       ],
