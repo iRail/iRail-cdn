@@ -19,11 +19,19 @@ import { addDays, brusselsDate, formatBytes, normalizePrefix, readJson, sha256Fi
 import { validateRelease } from './validate-release.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-/** Fingerprint of the code and contracts that shape the output: a pipeline change must not reuse a release id. */
-async function pipelineFingerprint() {
-  const files = ['scripts/build-sncb.mjs', 'scripts/convert-gtfs.mjs', 'specs/schemas.mjs', 'specs/lc-core-schemas.json', ...(await walk(path.join(root, 'scripts/lib'))).map((name) => `scripts/lib/${name}`)];
+/**
+ * Fingerprint of the code, contracts and configuration that shape the output: a pipeline change must not reuse a
+ * release id. config/ is hashed whole (rights, license, attribution, converter profile and station pin all reach the
+ * published files), and src/iri-strategy.ts mints the enrichment IRIs.
+ */
+export async function pipelineFingerprint(base = root) {
+  const files = [
+    'scripts/build-sncb.mjs', 'scripts/convert-gtfs.mjs', 'specs/schemas.mjs', 'specs/lc-core-schemas.json', 'src/iri-strategy.ts',
+    ...(await walk(path.join(base, 'scripts/lib'))).map((name) => `scripts/lib/${name}`),
+    ...(await walk(path.join(base, 'config'))).map((name) => `config/${name}`),
+  ];
   const hash = createHash('sha256');
-  for (const file of files) hash.update(file).update(await readFile(path.join(root, file)));
+  for (const file of files) hash.update(file).update(await readFile(path.join(base, file)));
   return hash.digest('hex');
 }
 const sha8 = (...parts) => createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 8);
