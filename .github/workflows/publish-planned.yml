@@ -104,6 +104,7 @@ jobs:
           DAYS_BACK: ${{ inputs.days_back }}
           DAYS_FORWARD: ${{ inputs.days_forward }}
         run: |
+          mkdir -p build # the redirect below is opened before node runs; nothing was restored on a first deployment
           args=(--prefix "${{ steps.pages.outputs.base_path }}" --previous build/previous --work build/work --staging build/staging --memory-mb 12000)
           [ -n "$GTFS_URL_OVERRIDE" ] && args+=(--url "$GTFS_URL_OVERRIDE")
           [ -n "$DAYS_BACK" ] && args+=(--days-back "$DAYS_BACK")
