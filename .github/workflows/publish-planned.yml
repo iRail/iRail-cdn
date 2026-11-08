@@ -1,6 +1,6 @@
 name: Publish planned data
 
-# Builds the NMBS/SNCB Linked Connections 2.0-alpha dump with the pinned gtfs2lc and publishes it, together with
+# Builds the NMBS/SNCB Linked Connections 2.0-alpha dump with gtfs2lc (latest feat-arrow, commit recorded per release) and publishes it, together with
 # retained earlier releases, as one complete GitHub Pages deployment. No Cloudflare account, Wrangler or RIV
 # credential is involved. Enable it once: Settings -> Pages -> Source: "GitHub Actions".
 on:
@@ -47,15 +47,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Read converter pin
+      - name: Read converter source
         id: pin
         run: |
           echo "repository=$(jq -r '.repository | sub("https://github.com/";"") | sub("\\.git$";"")' config/converter.json)" >> "$GITHUB_OUTPUT"
-          echo "commit=$(jq -r .commit config/converter.json)" >> "$GITHUB_OUTPUT"
+          echo "ref=$(jq -r .ref config/converter.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: ${{ steps.pin.outputs.repository }}
-          ref: ${{ steps.pin.outputs.commit }}
+          ref: ${{ steps.pin.outputs.ref }}
           path: .gtfs2lc
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts
@@ -78,15 +78,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Read converter pin
+      - name: Read converter source
         id: pin
         run: |
           echo "repository=$(jq -r '.repository | sub("https://github.com/";"") | sub("\\.git$";"")' config/converter.json)" >> "$GITHUB_OUTPUT"
-          echo "commit=$(jq -r .commit config/converter.json)" >> "$GITHUB_OUTPUT"
+          echo "ref=$(jq -r .ref config/converter.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: ${{ steps.pin.outputs.repository }}
-          ref: ${{ steps.pin.outputs.commit }}
+          ref: ${{ steps.pin.outputs.ref }}
           path: .gtfs2lc
       - name: Read stations pin
         id: stations

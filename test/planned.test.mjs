@@ -3,7 +3,8 @@
 // No Worker, Wrangler, Cloudflare credential or upstream network access is used.
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { tableFromIPC } from 'apache-arrow';
@@ -25,7 +26,7 @@ const skip = available ? false : `gtfs2lc checkout not found at ${converterDir};
 const work = path.join(root, 'build', 'test');
 const PROJECT = '/iRail-cdn';
 const stationsDir = path.join(root, 'fixtures', 'sncb', 'stations');
-const common = { converterDir, stationsDir, allowUnpinnedStations: true, startDate: '20261024', endDate: '20261111', regions: 1, allowUnpinned: process.env.GTFS2LC_ALLOW_UNPINNED === '1' };
+const common = { converterDir, stationsDir, allowUnpinnedStations: true, startDate: '20261024', endDate: '20261111', regions: 1, allowModified: process.env.GTFS2LC_ALLOW_MODIFIED === '1' };
 
 async function stage(name, { prefix = PROJECT, today = '20261109', gtfs = 'fixtures/sncb/gtfs', ...extra } = {}) {
   const directory = path.join(work, name);
@@ -41,7 +42,7 @@ const treeHash = async (directory) => sha256(Buffer.from(JSON.stringify(await Pr
 
 let a; let b; let siteA; let siteB;
 
-test('fixture GTFS converts through the pinned gtfs2lc into a validated release', { skip }, async () => {
+test('fixture GTFS converts through gtfs2lc into a validated release', { skip }, async () => {
   a = await stage('a', { today: '20261109' });
   assert.equal(a.status, 'built');
   assert.match(a.releaseId, /^sncb-20261109-[0-9a-f]{8}$/);
@@ -70,7 +71,9 @@ test('fixture GTFS converts through the pinned gtfs2lc into a validated release'
   assert.deepEqual(extensions.diagnostics.stopReduction, { stations: 5, droppedParents: 4, platforms: 4, remappedTransfers: 2 });
   assert.equal(extensions.capabilities.platforms, 'available');
   assert.deepEqual(extensions.diagnostics.unsupportedGtfs, { frequencies: 0, pathways: 0 });
-  assert.equal(extensions.sources[0].converter.commit, extensions.sources[0].converter.pinnedCommit);
+  assert.match(extensions.sources[0].converter.commit, /^[0-9a-f]{40}$/, 'the exact converter commit is recorded');
+  assert.equal(extensions.sources[0].converter.ref, 'feat-arrow');
+  assert.equal(extensions.sources[0].converter.pinnedCommit, undefined, 'the converter follows the latest feat-arrow');
   assert.equal(extensions.files.connections.length, manifest.connections.pages.length);
 });
 
@@ -388,4 +391,29 @@ test('the HTTP acceptance checker reports pass/warn/fail without hiding gaps', {
     const results = await checkPages(`${plain.origin}${PROJECT}/`, { sample: 1 });
     assert.ok(results.some((result) => result.severity === 'fail' && /CORS/.test(result.name)));
   } finally { await plain.close(); }
+});
+
+test('the converter commit is read from a clean checkout; modified and non-git checkouts are refused', async () => {
+  const { verifyConverter } = await import('../scripts/convert-gtfs.mjs');
+  const { execFileSync } = await import('node:child_process');
+  // Outside the project: inside it, git would find this repository instead of a non-git directory.
+  const directory = await mkdtemp(path.join(tmpdir(), 'fake-converter-'));
+  await mkdir(path.join(directory, 'bin'), { recursive: true });
+  await writeFile(path.join(directory, 'bin', 'gtfs2lc.js'), '// stub\n');
+  await writeFile(path.join(directory, 'package.json'), '{"version":"9.9.9"}\n');
+  const source = { ref: 'feat-arrow' };
+  await assert.rejects(verifyConverter(directory, source), /not a git checkout/);
+  const git = (...args) => execFileSync('git', ['-C', directory, '-c', 'user.name=t', '-c', 'user.email=t@example.org', ...args], { encoding: 'utf8' });
+  git('init', '-q');
+  git('add', '.');
+  git('commit', '-q', '-m', 'one');
+  const first = await verifyConverter(directory, source);
+  assert.match(first.commit, /^[0-9a-f]{40}$/);
+  assert.equal(first.version, '9.9.9');
+  await writeFile(path.join(directory, 'package.json'), '{"version":"9.9.10"}\n');
+  await assert.rejects(verifyConverter(directory, source), /local modifications/);
+  assert.equal((await verifyConverter(directory, source, { allowModified: true })).dirty, true);
+  git('commit', '-q', '-am', 'two');
+  assert.notEqual((await verifyConverter(directory, source)).commit, first.commit, 'a new converter commit is a different input');
+  await rm(directory, { recursive: true, force: true });
 });

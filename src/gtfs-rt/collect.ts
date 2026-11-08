@@ -1,8 +1,8 @@
 import type { Env } from './env.ts';
 import { readFeedHeader } from './header.ts';
 
-export const FEED_KEY = 'realtime/gtfs-rt/trip-updates.pb';
-export const LATEST_KEY = 'realtime/gtfs-rt/latest.json';
+/** The only published object: the latest SNCB snapshot. The source (sncb) is part of the path. */
+export const FEED_KEY = 'realtime/sncb/gtfs-rt/trip-updates.pb';
 /** Upstream refreshes about every 30 s. The cron trigger has one-minute granularity, so each run polls twice. */
 export const POLL_INTERVAL_MS = 30_000;
 /** Cached at the edge for this long: consumers see data at most ~15 s older than the bucket. */
@@ -48,7 +48,7 @@ const hex = (digest: ArrayBuffer): string => [...new Uint8Array(digest)].map((by
 
 /**
  * Fetches the upstream feed once and publishes it as the single latest version. Everything is validated before the
- * first write, so a failed fetch, a truncated or non-protobuf body, a differential feed or an older snapshot leaves
+ * write, so a failed fetch, a truncated or non-protobuf body, a differential feed or an older snapshot leaves
  * the previously published feed in place.
  */
 export async function collectOnce(env: Env, deps: Deps = {}): Promise<Outcome> {
@@ -76,34 +76,13 @@ export async function collectOnce(env: Env, deps: Deps = {}): Promise<Outcome> {
   if (header.timestamp === published) return { status: 'unchanged', timestamp: header.timestamp };
   if (header.timestamp < published) return { status: 'stale', timestamp: header.timestamp, published };
 
+  // The feed timestamp (and a digest, for diagnostics) travel as object metadata; the protobuf itself carries its
+  // timestamp, so consumers need no companion file.
   const sha256 = hex(await crypto.subtle.digest('SHA-256', bytes));
-  const cacheControl = `public, max-age=${MAX_AGE_SECONDS}`;
   await env.DATA.put(FEED_KEY, bytes, {
-    httpMetadata: { contentType: 'application/x-protobuf', cacheControl },
+    httpMetadata: { contentType: 'application/x-protobuf', cacheControl: `public, max-age=${MAX_AGE_SECONDS}` },
     customMetadata: { feedTimestamp: String(header.timestamp), sha256 },
   });
-  // Small description written last. The protobuf itself already carries its timestamp, so the two objects do not
-  // need to change atomically.
-  const origin = (env.PUBLIC_BASE_URL ?? '').replace(/\/+$/, '');
-  await env.DATA.put(LATEST_KEY, `${JSON.stringify({
-    format: 'irail-cdn-gtfs-rt',
-    version: 1,
-    sourceId: env.GTFS_SOURCE_ID ?? 'be.sncb',
-    feed: 'trip-updates',
-    url: `${origin}/${FEED_KEY}`,
-    mediaType: 'application/x-protobuf',
-    gtfsRealtimeVersion: header.version,
-    incrementality: 'FULL_DATASET',
-    feedTimestamp: header.timestamp,
-    feedTime: new Date(header.timestamp * 1000).toISOString(),
-    fetchedAt: new Date(now()).toISOString(),
-    entities: header.entities,
-    byteLength: bytes.length,
-    sha256,
-    retention: 'latest version only',
-    attribution: 'NMBS/SNCB real-time data via Belgian Mobility, CC BY 4.0',
-    license: 'https://creativecommons.org/licenses/by/4.0/',
-  }, null, 2)}\n`, { httpMetadata: { contentType: 'application/json', cacheControl } });
   return { status: 'published', timestamp: header.timestamp, byteLength: bytes.length, entities: header.entities };
 }
 

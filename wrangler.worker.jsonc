@@ -10,9 +10,7 @@
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     // Open Belgian Mobility feed (no key), the default of the iRail API. Full snapshot of TripUpdates, ~100 KB.
-    "GTFS_RT_URL": "https://sncb-opendata.hafas.de/gtfs/realtime/d22ad6759ee25bg84ddb6c818g4dc4de_TC",
-    "GTFS_SOURCE_ID": "be.sncb",
-    "PUBLIC_BASE_URL": "https://cdn.routableconnections.com"
+    "GTFS_RT_URL": "https://sncb-opendata.hafas.de/gtfs/realtime/d22ad6759ee25bg84ddb6c818g4dc4de_TC"
   },
   "observability": { "enabled": true }
 }

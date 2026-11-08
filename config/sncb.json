@@ -33,7 +33,7 @@
     "note": "Flip to true only after scripts/check-realtime.mjs passes against the public host: a manifest must not advertise a feed that is not being served. The trip template is verified by the converter against every trip IRI. No stopTemplate: the feed's stop ids are platform-level (8866001_3) and resolve to station + #platform through the iRail adapter.",
     "feeds": [
       {
-        "@id": "https://cdn.routableconnections.com/realtime/gtfs-rt/trip-updates.pb",
+        "@id": "https://cdn.routableconnections.com/realtime/sncb/gtfs-rt/trip-updates.pb",
         "@type": "GtfsRealtimeFeed",
         "tripTemplate": "https://irail.be/id/be.sncb/trips/{trip_id}"
       }

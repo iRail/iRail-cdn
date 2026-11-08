@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import pkg from 'gtfs-realtime-bindings';
-import { collectMinute, collectOnce, FEED_KEY, LATEST_KEY } from '../src/gtfs-rt/collect.ts';
+import { collectMinute, collectOnce, FEED_KEY } from '../src/gtfs-rt/collect.ts';
 import { readFeedHeader } from '../src/gtfs-rt/header.ts';
 import worker from '../src/gtfs-rt/worker.ts';
 
@@ -36,7 +36,7 @@ class FakeBucket {
 }
 
 const respond = (bytes, init = {}) => () => Promise.resolve(new Response(bytes, { status: 200, headers: { 'content-length': String(bytes?.length ?? 0), ...init.headers }, ...init }));
-const environment = (bucket = new FakeBucket(), extra = {}) => ({ DATA: bucket, GTFS_RT_URL: 'https://upstream.example/feed', PUBLIC_BASE_URL: 'https://cdn.example/', ...extra });
+const environment = (bucket = new FakeBucket(), extra = {}) => ({ DATA: bucket, GTFS_RT_URL: 'https://upstream.example/feed', ...extra });
 const deps = (fetcher) => ({ fetcher, now: () => NOW });
 
 test('the header reader matches a recorded upstream header and the protobuf library', () => {
@@ -59,29 +59,20 @@ test('malformed, truncated, headerless and unframed bodies are rejected', () => 
   assert.throws(() => readFeedHeader(Uint8Array.from(Buffer.from('0a0a0a03312e30100018', 'hex'))), /Truncated|exceeds/);
 });
 
-test('a snapshot is published as the single latest version, protobuf first, with edge-cache headers', async () => {
+test('a snapshot is published as the single latest SNCB object with edge-cache headers', async () => {
   const bucket = new FakeBucket();
   const bytes = feed();
   const outcome = await collectOnce(environment(bucket), deps(respond(bytes)));
   assert.deepEqual(outcome, { status: 'published', timestamp: TIMESTAMP, byteLength: bytes.length, entities: 3 });
-  assert.deepEqual(bucket.writes, [FEED_KEY, LATEST_KEY]);
+  assert.equal(FEED_KEY, 'realtime/sncb/gtfs-rt/trip-updates.pb', 'the source is part of the public path');
+  assert.deepEqual([...bucket.objects.keys()], [FEED_KEY], 'one object: no companion file and no archive copies');
+  assert.deepEqual(bucket.writes, [FEED_KEY]);
   const stored = bucket.objects.get(FEED_KEY);
   assert.deepEqual(Buffer.from(stored.value), Buffer.from(bytes), 'upstream bytes are stored untouched');
   assert.equal(stored.httpMetadata.contentType, 'application/x-protobuf');
   assert.equal(stored.httpMetadata.cacheControl, 'public, max-age=15');
   assert.equal(stored.customMetadata.feedTimestamp, String(TIMESTAMP));
-  const latest = JSON.parse(bucket.text(LATEST_KEY));
-  assert.equal(latest.url, 'https://cdn.example/realtime/gtfs-rt/trip-updates.pb');
-  assert.equal(latest.feedTimestamp, TIMESTAMP);
-  assert.equal(latest.feedTime, '2026-11-08T13:46:49.000Z');
-  assert.equal(latest.fetchedAt, '2026-11-08T13:47:30.000Z');
-  assert.equal(latest.sha256, createHash('sha256').update(bytes).digest('hex'));
-  assert.equal(latest.byteLength, bytes.length);
-  assert.equal(latest.retention, 'latest version only');
-  assert.match(latest.attribution, /Belgian Mobility/);
-  assert.equal(latest.license, 'https://creativecommons.org/licenses/by/4.0/');
-  assert.equal(bucket.objects.get(LATEST_KEY).httpMetadata.cacheControl, 'public, max-age=15');
-  assert.deepEqual([...bucket.objects.keys()], [FEED_KEY, LATEST_KEY], 'no archive copies are kept');
+  assert.equal(stored.customMetadata.sha256, createHash('sha256').update(bytes).digest('hex'));
 });
 
 test('an unchanged or older snapshot is not written; a newer one replaces the previous', async () => {
@@ -93,8 +84,9 @@ test('an unchanged or older snapshot is not written; a newer one replaces the pr
   assert.deepEqual(bucket.writes, []);
   const newer = await collectOnce(environment(bucket), deps(respond(feed({ timestamp: TIMESTAMP + 30, trips: 4 }))));
   assert.equal(newer.status, 'published');
-  assert.equal(JSON.parse(bucket.text(LATEST_KEY)).feedTimestamp, TIMESTAMP + 30);
-  assert.equal(JSON.parse(bucket.text(LATEST_KEY)).entities, 4);
+  assert.equal(readFeedHeader(bucket.objects.get(FEED_KEY).value).timestamp, TIMESTAMP + 30);
+  assert.equal(readFeedHeader(bucket.objects.get(FEED_KEY).value).entities, 4);
+  assert.equal(bucket.objects.get(FEED_KEY).customMetadata.feedTimestamp, String(TIMESTAMP + 30));
 });
 
 test('every failure leaves the previously published feed untouched', async () => {
@@ -172,7 +164,7 @@ test('the Worker entry point is cron-only and runs a full minute', async () => {
     await worker.scheduled({ scheduledTime: Date.now() }, environment(bucket));
   } finally { globalThis.fetch = original; globalThis.setTimeout = realSetTimeout; }
   assert.equal(upstream, 2);
-  assert.deepEqual(bucket.writes, [FEED_KEY, LATEST_KEY], 'the second poll saw an unchanged timestamp and wrote nothing');
+  assert.deepEqual(bucket.writes, [FEED_KEY], 'the second poll saw an unchanged timestamp and wrote nothing');
 });
 
 test('the live checker reports pass, warn and fail for a served feed', async () => {
@@ -180,14 +172,16 @@ test('the live checker reports pass, warn and fail for a served feed', async () 
   const bucket = new FakeBucket();
   const bytes = feed({ timestamp: Math.floor(NOW / 1000) - 20 });
   await collectOnce(environment(bucket), deps(respond(bytes)));
+  const requested = [];
   const serve = (overrides = {}) => async (input) => {
-    const key = new URL(input).pathname.slice(1);
-    const object = bucket.objects.get(key);
+    requested.push(new URL(input).pathname);
+    const object = bucket.objects.get(new URL(input).pathname.slice(1));
     if (!object) return new Response('missing', { status: 404 });
     return new Response(object.value, { headers: { 'content-type': object.httpMetadata.contentType, 'cache-control': object.httpMetadata.cacheControl, 'access-control-allow-origin': '*', ...overrides } });
   };
   const good = await checkRealtime('https://cdn.example', { fetcher: serve(), now: () => NOW });
   assert.deepEqual(good.filter((result) => result.severity === 'fail'), []);
+  assert.deepEqual([...new Set(requested)], ['/realtime/sncb/gtfs-rt/trip-updates.pb'], 'the feed is the only object that is needed');
   assert.ok(good.some((result) => result.severity === 'warn' && /edge cache/.test(result.name)), 'a direct-from-bucket response without cf-cache-status is flagged');
   const noCors = await checkRealtime('https://cdn.example', { fetcher: serve({ 'access-control-allow-origin': '' }), now: () => NOW });
   assert.ok(noCors.some((result) => result.severity === 'fail' && /CORS/.test(result.name)));

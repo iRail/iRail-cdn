@@ -1,4 +1,4 @@
-// Bounded Node wrapper around the pinned gtfs2lc `feat-arrow` CLI. It never re-implements GTFS parsing,
+// Bounded Node wrapper around the gtfs2lc `feat-arrow` CLI. It never re-implements GTFS parsing,
 // calendar expansion or connection generation: it verifies the converter source, extracts a disposable
 // copy of the archive, runs the CLI and returns the staging directory.
 import { execFile, spawn } from 'node:child_process';
@@ -30,7 +30,12 @@ export async function extractArchive(archive, directory) {
   return { sha256: sha256(bytes), byteLength: bytes.length, files: names.sort() };
 }
 
-export async function verifyConverter(converterDir, pin, { allowUnpinned = false } = {}) {
+/**
+ * The converter follows the latest `feat-arrow`, so there is no commit to compare with: the exact commit is read from
+ * the checkout and recorded in the release. A checkout with local modifications is refused, because its commit would
+ * not describe what ran.
+ */
+export async function verifyConverter(converterDir, source, { allowModified = false } = {}) {
   const cli = path.join(converterDir, 'bin', 'gtfs2lc.js');
   await readFile(cli).catch(() => { throw new Error(`gtfs2lc CLI not found at ${cli}`); });
   let commit = null;
@@ -39,11 +44,10 @@ export async function verifyConverter(converterDir, pin, { allowUnpinned = false
     commit = (await exec('git', ['-C', converterDir, 'rev-parse', 'HEAD'])).stdout.trim();
     dirty = (await exec('git', ['-C', converterDir, 'status', '--porcelain', '--untracked-files=no'])).stdout.trim() !== '';
   } catch { /* not a git checkout */ }
-  const pinned = commit === pin.commit && !dirty;
-  if (!pinned && !allowUnpinned) {
-    throw new Error(`gtfs2lc at ${converterDir} is ${commit ? `${commit}${dirty ? ' (modified)' : ''}` : 'not a git checkout'}, expected pinned commit ${pin.commit}`);
+  if (!commit || (dirty && !allowModified)) {
+    throw new Error(`gtfs2lc at ${converterDir} is ${commit ? `${commit} with local modifications` : 'not a git checkout'}: its commit would not describe the build (use a clean checkout of ${source.ref}${allowModified ? '' : ', or --allow-modified for development'})`);
   }
-  return { cli, commit, pinned, dirty, version: (await readJson(path.join(converterDir, 'package.json'))).version };
+  return { cli, commit, ref: source.ref, dirty, version: (await readJson(path.join(converterDir, 'package.json'))).version };
 }
 
 function run(command, args, { timeoutMs, logFile }) {
@@ -68,10 +72,10 @@ function run(command, args, { timeoutMs, logFile }) {
  * `stagingDir` must be fresh: a stale manifest would imply a successful conversion that did not happen.
  */
 export async function convertGtfs({
-  gtfsDir, stagingDir, converterDir, pin, strategyPath, sourceId, releaseId, startDate, endDate,
-  urlPrefix, regions = 1, license, rights, realtimePath, memoryMb = 12000, timeoutMs = 5 * 60 * 60 * 1000, allowUnpinned = false,
+  gtfsDir, stagingDir, converterDir, converterSource: pin, strategyPath, sourceId, releaseId, startDate, endDate,
+  urlPrefix, regions = 1, license, rights, realtimePath, memoryMb = 12000, timeoutMs = 5 * 60 * 60 * 1000, allowModified = false,
 }) {
-  const converter = await verifyConverter(converterDir, pin, { allowUnpinned });
+  const converter = await verifyConverter(converterDir, pin, { allowModified });
   await rm(stagingDir, { recursive: true, force: true });
   await mkdir(stagingDir, { recursive: true });
   const args = [

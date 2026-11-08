@@ -6,8 +6,4 @@ export interface Env {
   /** Optional credential for token-protected mirrors; the open hafas feed needs none. */
   GTFS_RT_TOKEN?: string;
   GTFS_RT_TOKEN_HEADER?: string;
-  /** Public origin of the bucket's custom domain, e.g. https://cdn.routableconnections.com */
-  PUBLIC_BASE_URL?: string;
-  /** Logical source namespace of the feed. */
-  GTFS_SOURCE_ID?: string;
 }

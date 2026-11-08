@@ -4,8 +4,7 @@ The cron-only Worker [src/gtfs-rt/](../src/gtfs-rt/) republishes the open NMBS/S
 
 ```
 hafas open feed ──(2 fetches/min, cron)──▶ Worker ──▶ R2 bucket ──▶ cdn.routableconnections.com (edge cache)
-                                                        realtime/gtfs-rt/trip-updates.pb   (max-age 15 s)
-                                                        realtime/gtfs-rt/latest.json       (max-age 15 s)
+                                                        realtime/sncb/gtfs-rt/trip-updates.pb   (max-age 15 s)
 ```
 
 The upstream feed needs **no credential**. Nothing below has to be sent to anyone but Cloudflare and GitHub; never paste tokens into issues, chats or commits.
@@ -18,7 +17,7 @@ The upstream feed needs **no credential**. Nothing below has to be sent to anyon
    ```json
    [{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "ExposeHeaders": ["ETag", "Content-Length"], "MaxAgeSeconds": 3600 }]
    ```
-4. **Caching → Cache Rules → Create rule**: *When* hostname equals `cdn.routableconnections.com` and URI path starts with `/realtime/`; *Then* cache eligibility **Eligible for cache**, Edge TTL **Use cache-control header if present, bypass cache if not**, Browser TTL **Respect origin**. Without a rule Cloudflare does not cache `.pb` files, and every poll would read R2. The objects carry `Cache-Control: public, max-age=15`.
+4. **Caching → Cache Rules → Create rule**: *When* hostname equals `cdn.routableconnections.com` and URI path starts with `/realtime/sncb/`; *Then* cache eligibility **Eligible for cache**, Edge TTL **Use cache-control header if present, bypass cache if not**, Browser TTL **Respect origin**. Without a rule Cloudflare does not cache `.pb` files, and every poll would read R2. The objects carry `Cache-Control: public, max-age=15`.
 
 ## One-time setup in GitHub
 
@@ -32,8 +31,7 @@ The upstream feed needs **no credential**. Nothing below has to be sent to anyon
 
 ```sh
 npm run check:realtime:live     # or: node scripts/check-realtime.mjs https://cdn.routableconnections.com
-curl -sI https://cdn.routableconnections.com/realtime/gtfs-rt/trip-updates.pb   # cf-cache-status, content-type, cache-control
-curl -s  https://cdn.routableconnections.com/realtime/gtfs-rt/latest.json
+curl -sI https://cdn.routableconnections.com/realtime/sncb/gtfs-rt/trip-updates.pb   # cf-cache-status, content-type, cache-control
 ```
 
 Wait about a minute after the first deploy. The Cloudflare dashboard (Workers → `irail-gtfs-rt` → Logs) shows one `{"event":"gtfs-rt",…}` line per poll: `published`, `unchanged` (the upstream had not refreshed yet) or an error.
@@ -47,8 +45,9 @@ When the check passes, set `realtime.enabled` to `true` in [config/sncb.json](..
 | Worker invocations | 1,440/day (one cron per minute) | 100,000/day |
 | Upstream fetches | 2,880/day, 2 per invocation | 50 subrequests per invocation |
 | Worker CPU | about 1 ms per poll (header-only parse, no protobuf decode) | 10 ms per invocation |
-| R2 writes | up to 5,760/day (2 objects per new snapshot) ≈ 173,000/month | 1,000,000/month |
-| R2 storage | 2 small objects (~110 KB) | 10 GB |
+| R2 writes | up to 2,880/day (one object per new snapshot) ≈ 86,400/month | 1,000,000/month |
+| R2 reads by the Worker | 2,880/day (a metadata check before each write) ≈ 86,400/month | 10,000,000/month |
+| R2 storage | one object (~110 KB), overwritten | 10 GB |
 | Reads and egress | served from the edge cache; R2 egress is free | — |
 
 These limits are from Cloudflare's documentation at the time of writing: check the current figures in the dashboard. Two things to watch on the first days: that every cron run really performs its second poll after about 30 s (a Worker may not be kept alive that long on the free plan; if it is not, switch the loop to a Durable Object alarm), and that `cf-cache-status` becomes `HIT`, which keeps R2 reads far below the 10 million/month limit.
@@ -59,4 +58,4 @@ These limits are from Cloudflare's documentation at the time of writing: check t
 * **Different upstream or a token-protected mirror:** change `GTFS_RT_URL`; for a credential run `npx wrangler secret put GTFS_RT_TOKEN --config wrangler.worker.jsonc` (and set `GTFS_RT_TOKEN_HEADER` if the header is not `x-rt-token`). Redirects are never followed, so the credential cannot be replayed to another host.
 * **What is validated before publishing:** HTTPS, HTTP 200, complete download (length and protobuf framing), GTFS-RT version, full-dataset incrementality, a timestamp that is not in the future and not older than the published one. A failure leaves the previous snapshot in place.
 * **Local test:** `npm run check:realtime` (no Cloudflare needed). To run the Worker locally against a local R2 emulation use `npx wrangler dev --test-scheduled --config wrangler.worker.jsonc` and trigger it with `curl 'http://localhost:8787/cdn-cgi/handler/scheduled'`; put a credential for a protected mirror in an untracked `.dev.vars`.
-* **Provenance:** NMBS/SNCB real-time data via Belgian Mobility, CC BY 4.0. `latest.json` carries the attribution and licence.
+* **Provenance:** NMBS/SNCB real-time data via Belgian Mobility, CC BY 4.0. The feed is a single object; its attribution is recorded in `irail.json` (source `gtfs-rt`) once it is linked from the manifest, and in this documentation.

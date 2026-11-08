@@ -1,5 +1,5 @@
 // Builds one validated NMBS/SNCB LC2-alpha release into a staging directory:
-// archive -> extracted copy -> pinned gtfs2lc -> iRail static enrichment -> integrity catalog -> validation.
+// archive -> extracted copy -> gtfs2lc (latest feat-arrow) -> iRail static enrichment -> integrity catalog -> validation.
 // The result is a staging tree (manifest.jsonld + releases/<id>/) for scripts/assemble-pages.mjs.
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
@@ -74,7 +74,7 @@ export async function buildSncb(options) {
   const workDir = path.resolve(options.workDir ?? 'build/work');
   const stagingDir = path.resolve(options.stagingDir ?? 'build/staging');
   const converterDir = path.resolve(options.converterDir ?? process.env.GTFS2LC_DIR ?? path.join(root, '..', 'gtfs2lc'));
-  await verifyConverter(converterDir, pin, { allowUnpinned: options.allowUnpinned });
+  const converterInfo = await verifyConverter(converterDir, pin, { allowModified: options.allowModified });
 
   const realtime = options.realtime === false ? undefined : options.realtime ?? (config.realtime?.enabled ? config.realtime.feeds : undefined);
   let realtimePath;
@@ -111,7 +111,7 @@ export async function buildSncb(options) {
   if (feed.end && endDate > feed.end) endDate = feed.end;
   if (startDate > endDate) throw new Error(`The feed (${feed.start}..${feed.end}) does not cover the requested horizon ${startDate}..${endDate}`);
   const regions = options.regions ?? config.regions;
-  const inputs = sha8(archive.sha256 ?? feed.version, await pipelineFingerprint(), pin.commit, curated?.sha256 ?? null, realtime ?? null, strategyConfig, startDate, endDate, regions, prefix);
+  const inputs = sha8(archive.sha256 ?? feed.version, await pipelineFingerprint(), converterInfo.commit, curated?.sha256 ?? null, realtime ?? null, strategyConfig, startDate, endDate, regions, prefix);
   const releaseId = options.releaseId ?? `${sourceId.replace(/^[a-z]+\./u, '')}-${today}-${inputs}`;
 
   if (options.previousDir) {
@@ -121,8 +121,8 @@ export async function buildSncb(options) {
 
   console.error(`Converting ${startDate}..${endDate} as ${releaseId} (feed ${feed.version ?? 'unversioned'})`);
   const { converter, releaseDir } = await convertGtfs({
-    gtfsDir, stagingDir, converterDir, pin, strategyPath, sourceId, releaseId, startDate, endDate, urlPrefix: prefix, regions,
-    license: config.license ?? undefined, rights: config.rights ?? undefined, realtimePath, memoryMb: options.memoryMb, allowUnpinned: options.allowUnpinned,
+    gtfsDir, stagingDir, converterDir, converterSource: pin, strategyPath, sourceId, releaseId, startDate, endDate, urlPrefix: prefix, regions,
+    license: config.license ?? undefined, rights: config.rights ?? undefined, realtimePath, memoryMb: options.memoryMb, allowModified: options.allowModified,
   });
   const afterConversion = Date.now();
   const enrichment = await buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations: curated?.stations, platforms: reduced.platforms });
@@ -134,7 +134,7 @@ export async function buildSncb(options) {
       id: 'gtfs-static', description: config.gtfs.attribution, rights: config.rights ?? null, license: config.license ?? null,
       archive: { sha256: archive.sha256, byteLength: archive.byteLength },
       feed: { version: feed.version, publisher: feed.publisher, startDate: feed.start, endDate: feed.end },
-      converter: { name: 'gtfs2lc', repository: pin.repository, branch: pin.branch, commit: converter.commit, pinnedCommit: pin.commit, version: converter.version, profile: pin.profile },
+      converter: { name: 'gtfs2lc', repository: pin.repository, ref: pin.ref, commit: converter.commit, version: converter.version, profile: pin.profile },
     }, ...(realtime ? [{
       id: 'gtfs-rt', description: 'GTFS Realtime TripUpdates republished by iRail from the open Belgian Mobility feed (NMBS/SNCB, CC BY 4.0); latest snapshot only',
       license: 'https://creativecommons.org/licenses/by/4.0/', feeds: realtime.map((feed) => feed['@id']),
@@ -170,7 +170,7 @@ export async function buildSncb(options) {
   const result = {
     status: 'built', releaseId, prefix, startDate, endDate, regions, generatedAt: finalized.manifest.generatedAt, bytes,
     rows: report.rows, pages: report.pages, maxPageRows: report.maxPageRows,
-    archive, feed, converter: { commit: converter.commit, pinned: converter.pinned },
+    archive, feed, converter: { commit: converter.commit, ref: converter.ref },
     seconds: { conversion: (afterConversion - started) / 1000, total: (Date.now() - started) / 1000 },
   };
   await writeFile(path.join(stagingDir, 'build-result.json'), `${JSON.stringify(result, null, 2)}\n`);
@@ -183,7 +183,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     archive: { type: 'string' }, url: { type: 'string' }, 'gtfs-dir': { type: 'string' }, converter: { type: 'string' },
     work: { type: 'string' }, staging: { type: 'string' }, previous: { type: 'string' }, prefix: { type: 'string' },
     'start-date': { type: 'string' }, 'end-date': { type: 'string' }, 'days-back': { type: 'string' }, 'days-forward': { type: 'string' },
-    stations: { type: 'string' }, realtime: { type: 'boolean' }, 'release-id': { type: 'string' }, regions: { type: 'string' }, 'memory-mb': { type: 'string' }, 'allow-unpinned': { type: 'boolean' },
+    stations: { type: 'string' }, realtime: { type: 'boolean' }, 'release-id': { type: 'string' }, regions: { type: 'string' }, 'memory-mb': { type: 'string' }, 'allow-unpinned': { type: 'boolean' }, 'allow-modified': { type: 'boolean' },
   } });
   const number = (value) => (value === undefined ? undefined : Number(value));
   try {
@@ -192,7 +192,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       archive: values.archive, url: values.url, gtfsDir: values['gtfs-dir'], stationsDir: values.stations ?? process.env.STATIONS_DIR, converterDir: values.converter, workDir: values.work, stagingDir: values.staging,
       previousDir: values.previous, prefix: values.prefix, startDate: values['start-date'], endDate: values['end-date'],
       daysBack: number(values['days-back']), daysForward: number(values['days-forward']), releaseId: values['release-id'],
-      regions: number(values.regions), memoryMb: number(values['memory-mb']), allowUnpinned: values['allow-unpinned'],
+      regions: number(values.regions), memoryMb: number(values['memory-mb']), allowUnpinned: values['allow-unpinned'], allowModified: values['allow-modified'],
     });
     console.log(JSON.stringify(result));
     if (result.status === 'unchanged') await rm(path.resolve(values.staging ?? 'build/staging'), { recursive: true, force: true });

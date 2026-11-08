@@ -5,7 +5,7 @@ on:
 permissions:
   contents: read
 jobs:
-  # Credential-free planned-data checks: contracts, fixture conversion with the pinned gtfs2lc, validation,
+  # Credential-free planned-data checks: contracts, fixture conversion with gtfs2lc (latest feat-arrow), validation,
   # Pages assembly and the independent reader. No Wrangler, Miniflare or Cloudflare binding is used.
   planned:
     runs-on: ubuntu-latest
@@ -16,15 +16,15 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Read converter pin
+      - name: Read converter source
         id: pin
         run: |
           echo "repository=$(jq -r '.repository | sub("https://github.com/";"") | sub("\\.git$";"")' config/converter.json)" >> "$GITHUB_OUTPUT"
-          echo "commit=$(jq -r .commit config/converter.json)" >> "$GITHUB_OUTPUT"
+          echo "ref=$(jq -r .ref config/converter.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: ${{ steps.pin.outputs.repository }}
-          ref: ${{ steps.pin.outputs.commit }}
+          ref: ${{ steps.pin.outputs.ref }}
           path: .gtfs2lc
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts

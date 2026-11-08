@@ -1,8 +1,6 @@
 {
   "repository": "https://github.com/linkedconnections/gtfs2lc.git",
-  "branch": "feat-arrow",
-  "commit": "bb4c859e4c79857736bb00dd33a402ce2b171013",
-  "subject": "Arrow LC2.0 version",
+  "ref": "feat-arrow",
   "profile": "irail-cdn-v1",
-  "notes": "Frozen by commit, never by branch name. The commit contains the LC 2-alpha core (lib/arrow/definitions.json) that matches config/lc-contract.json; its package-lock.json pins the converter dependencies. Release validation re-checks every produced file against specs/lc-core-schemas.json."
+  "notes": "Follows the latest feat-arrow until it is merged into main; then change ref. The exact commit used is recorded in every release (irail.json sources[].converter.commit) and is part of the release id, so a converter change always produces a new release. Every produced file is still validated against the LC 2-alpha schemas pinned in config/lc-contract.json, which catches a converter change that breaks the contract."
 }

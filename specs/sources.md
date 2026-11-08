@@ -24,7 +24,6 @@ RIV endpoints: `dacs` (liveboards with platform and delay), `journey` (occupancy
 
 | URL | Content | Caching |
 | --- | --- | --- |
-| `/realtime/gtfs-rt/trip-updates.pb` | upstream protobuf, byte for byte, **latest version only** | `max-age=15` |
-| `/realtime/gtfs-rt/latest.json` | `feedTimestamp`, `fetchedAt`, `entities`, `byteLength`, `sha256`, attribution, licence | `max-age=15` |
+| `https://cdn.routableconnections.com/realtime/sncb/gtfs-rt/trip-updates.pb` | upstream protobuf, byte for byte, **latest version only** | `max-age=15` |
 
-No archive is kept; history is a separate concern. Attribution: NMBS/SNCB real-time data via Belgian Mobility, CC BY 4.0.
+That is the only object: the feed timestamp is in the protobuf header, there is no companion file, and no archive is kept (history is a separate concern). The operator is part of the path so that other operators and feeds can sit next to it (`/realtime/<operator>/<format>/…`). Attribution: NMBS/SNCB real-time data via Belgian Mobility, CC BY 4.0; it is recorded in the `gtfs-rt` source of the release's `irail.json` once the feed is linked.
