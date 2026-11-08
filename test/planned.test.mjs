@@ -32,7 +32,7 @@ async function stage(name, { prefix = PROJECT, today = '20261109', gtfs = 'fixtu
   const directory = path.join(work, name);
   await rm(directory, { recursive: true, force: true });
   await cp(path.join(root, gtfs), path.join(directory, 'gtfs'), { recursive: true }); // the converter normalizes its input in place
-  const result = await buildSncb({ ...common, prefix, today, gtfsDir: path.join(directory, 'gtfs'), stagingDir: path.join(directory, 'staging'), workDir: path.join(directory, 'work'), ...extra });
+  const result = await buildSncb({ ...common, prefix, today, realtime: false, gtfsDir: path.join(directory, 'gtfs'), stagingDir: path.join(directory, 'staging'), workDir: path.join(directory, 'work'), ...extra });
   return { ...result, staging: path.join(directory, 'staging'), directory };
 }
 const load = async (directory, relative) => tableFromIPC(await readFile(path.join(directory, relative)));
@@ -45,7 +45,7 @@ let a; let b; let siteA; let siteB;
 test('fixture GTFS converts through gtfs2lc into a validated release', { skip }, async () => {
   a = await stage('a', { today: '20261109' });
   assert.equal(a.status, 'built');
-  assert.match(a.releaseId, /^sncb-20261109-[0-9a-f]{8}$/);
+  assert.match(a.releaseId, /^nmbs-sncb-20261109-[0-9a-f]{8}$/);
   assert.equal(a.rows.connections, 19);
   assert.equal(a.rows.stops, 5, 'one core stop per station');
   assert.equal(a.rows.platforms, 4);
@@ -136,10 +136,10 @@ test('canonical iRail IRIs: a station is one stop, platforms hang off it by hash
   const ic1000 = tripExtra.filter((row) => row.vehicleIri === 'http://irail.be/vehicle/IC1000');
   assert.equal(ic1000.length, 2, 'two scheduled trips share one vehicle number');
   assert.notEqual(ic1000[0].iri, ic1000[1].iri);
-  assert.ok(ic1000.every((row) => row.iri.startsWith('https://irail.be/id/be.sncb/trips/88____%3A04')));
+  assert.ok(ic1000.every((row) => row.iri.startsWith('https://irail.be/id/nmbs-sncb/trips/88____%3A04')));
   const iris = [...(await load(dir, releaseFile(a.releaseId, 'connections/0/2026-11-09T06/00000.arrow'))).getChild('iri').toArray()];
   assert.ok(iris.length > 0 && new Set(iris).size === iris.length);
-  assert.ok(iris.every((iri) => /^https:\/\/irail\.be\/id\/be\.sncb\/runs\/.+\/20261109\/connections\/\d+$/.test(iri)));
+  assert.ok(iris.every((iri) => /^https:\/\/irail\.be\/id\/nmbs-sncb\/runs\/.+\/20261109\/connections\/\d+$/.test(iri)));
 });
 
 test('DST fall-back, after-midnight times, linked transfers and pickup/drop-off survive conversion', { skip }, async () => {
@@ -193,7 +193,7 @@ test('the curated stations source is optional, pinned and strictly parsed', { sk
 });
 
 test('the live GTFS-RT feed is linked from the manifest only when enabled, with a verified trip template', { skip }, async () => {
-  const feed = { '@id': 'https://cdn.routableconnections.com/realtime/gtfs-rt/trip-updates.pb', '@type': 'GtfsRealtimeFeed', tripTemplate: 'https://irail.be/id/be.sncb/trips/{trip_id}' };
+  const feed = { '@id': 'https://cdn.routableconnections.com/realtime/gtfs-rt/trip-updates.pb', '@type': 'GtfsRealtimeFeed', tripTemplate: 'https://irail.be/id/nmbs-sncb/trips/{trip_id}' };
   const without = await readJson(path.join(a.staging, 'manifest.jsonld'));
   assert.equal(without.realtime, undefined);
   assert.equal((await readJson(path.join(a.staging, releaseFile(a.releaseId, RELEASE_EXTENSIONS)))).capabilities.realtime, 'unconfigured');
@@ -205,7 +205,7 @@ test('the live GTFS-RT feed is linked from the manifest only when enabled, with 
   assert.equal(extensions.sources.find((source) => source.id === 'gtfs-rt').feeds[0], feed['@id']);
   assert.notEqual(linked.releaseId, a.releaseId, 'advertising a feed is a different release');
   // Every trip id of the feed must expand to the release's trip IRI, or the build fails instead of advertising a broken link.
-  await assert.rejects(stage('realtime-bad', { realtime: [{ ...feed, tripTemplate: 'https://irail.be/id/be.sncb/other/{trip_id}' }] }), /does not reproduce trip IRI/);
+  await assert.rejects(stage('realtime-bad', { realtime: [{ ...feed, tripTemplate: 'https://irail.be/id/nmbs-sncb/other/{trip_id}' }] }), /does not reproduce trip IRI/);
 });
 
 test('unsupported GTFS features are rejected rather than silently dropped', { skip }, async () => {
@@ -264,7 +264,7 @@ test('failed, oversized, mutated and conflicting builds leave the last good site
   const again = await stage('again', { today: '20261109', releaseId: a.releaseId });
   await assert.rejects(assemblePages({ stagingDir: again.staging, previousDir: siteA, outDir: path.join(work, 'site-again'), prefix: PROJECT }), /immutable releases cannot be replaced/);
   // Identical inputs already published are reported as unchanged and skip the conversion.
-  const unchanged = await buildSncb({ ...common, prefix: PROJECT, today: '20261109', gtfsDir: path.join(work, 'a', 'gtfs'), stagingDir: path.join(work, 'unchanged'), previousDir: siteA });
+  const unchanged = await buildSncb({ ...common, prefix: PROJECT, today: '20261109', realtime: false, gtfsDir: path.join(work, 'a', 'gtfs'), stagingDir: path.join(work, 'unchanged'), previousDir: siteA });
   assert.equal(unchanged.status, 'unchanged');
   assert.equal(unchanged.releaseId, a.releaseId, 'the release id is a function of the inputs and the pipeline code');
 });

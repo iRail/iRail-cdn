@@ -26,7 +26,7 @@ All producers call the same journal object `all-updates` through the `UPDATES` b
 ```ts
 const journal = env.UPDATES.get(env.UPDATES.idFromName('all-updates'));
 await journal.ingest([{
-  observationId: 'urn:collector:be.sncb:riv:response-hash:call-10',
+  observationId: 'urn:collector:nmbs-sncb:riv:response-hash:call-10',
   entityIri: ids.call(tripKey, serviceDate, 10),
   sourceIri: ids.provider('riv'),
   observedAt: originalFetchedAt,

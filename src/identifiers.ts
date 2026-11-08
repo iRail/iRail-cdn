@@ -43,5 +43,5 @@ export function sncbStationIri(uic: string): string {
   const match = /^(?:00)?(\d{7})$/.exec(uic);
   if (!match) throw new Error('SNCB station UIC must have seven digits or a 00 prefix');
   const key = match[1]!;
-  return createIriStrategy('be.sncb').mint('station', { stops: { key, uic: key } }, [key]);
+  return createIriStrategy('nmbs-sncb').mint('station', { stops: { key, uic: key } }, [key]);
 }

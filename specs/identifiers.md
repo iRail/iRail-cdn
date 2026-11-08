@@ -18,14 +18,14 @@ Changing the delivery host leaves entity IRIs unchanged. A stream's version IRIs
 
 ## Namespace and key rules
 
-- A registered source key names a logical operator/identifier space: `be.sncb`, later e.g. `nl.ns` or `be.delijn`. It is not `riv`, `gtfs` or the name of a mirror. SNCB's GTFS-static, GTFS-RT, RIV and RSS collectors all map into `be.sncb`. `demo.fixture` is reserved for synthetic data.
+- A registered source key names a logical operator/identifier space: `nmbs-sncb`, later e.g. `nl.ns` or `be.delijn`. It is not `riv`, `gtfs` or the name of a mirror. SNCB's GTFS-static, GTFS-RT, RIV and RSS collectors all map into `nmbs-sncb`. `demo.fixture` is reserved for synthetic data.
 - Keys have lower-case registry syntax `[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*`. Entity kinds have separate fixed path components. Raw values are opaque, case-sensitive strings. Encode each entire key as one RFC 3986 path component exactly once. `/`, `%`, `?`, `#` and Unicode cannot create extra path segments; `a/b` and literal `a%2Fb` remain distinct. Empty/dot-only keys are rejected.
 - The mapper supplies a persistent entity key. A raw GTFS `trip_id` can serve as that key only when its source stability is known. Persist a curated raw-ID-to-key mapping across static releases when feeds renumber entities. If a source recycles a raw ID for a different entity, mint a new key. Do not pretend public train number alone identifies a trip template.
 - Keep original external IDs and aliases alongside the IRI. `releaseId` scopes integer indices and source-feed versions, not canonical identity. Raw ID joins require a matching feed generation even though the resulting mapped IRI is release-independent.
 
 ## Default templates
 
-Let `B=https://irail.be/id`, `S=be.sncb`, and each `<key>` be one escaped component.
+Let `B=https://irail.be/id`, `S=nmbs-sncb`, and each `<key>` be one escaped component.
 
 | Entity | IRI |
 | --- | --- |
@@ -42,7 +42,7 @@ Let `B=https://irail.be/id`, `S=be.sncb`, and each `<key>` be one escaped compon
 
 A run is dated using the original service date, including after-midnight events. Actual time changes cannot change its identifier. Frequency runs need an instance discriminator; builders must expand them to distinct persistent trip keys or declare them unsupported. Repeated stops use original sequences, not station identity, in call/connection keys.
 
-## `be.sncb` IRIs in the production build
+## `nmbs-sncb` IRIs in the production build
 
 [config/sources.json](../config/sources.json) takes the identifiers from the iRail API (`be.irail.api.util.IrailUri`, `LinkedConnectionsService`, `Stop.getHafasId`) and keeps one identifier per concept:
 
@@ -51,15 +51,15 @@ A run is dated using the original service date, including after-midnight events.
 | Station (and its station-level stop, which is what connections use) | `http://irail.be/stations/NMBS/00<hafas>`, e.g. `…/008892007`; foreign stops too (`…/007015400`) |
 | Platform | `<station IRI>#<platform code>`, e.g. `http://irail.be/stations/NMBS/008892007#10`; extension `platforms.arrow` |
 | Vehicle | `http://irail.be/vehicle/<label><number>`, in `tripEnrichment.vehicleIri` |
-| Trip, route, run, connection | `https://irail.be/id/be.sncb/trips/…`, `/routes/…`, `/runs/<trip>/<date>`, `/runs/<trip>/<date>/connections/<sequence>` |
+| Trip, route, run, connection | `https://irail.be/id/nmbs-sncb/trips/…`, `/routes/…`, `/runs/<trip>/<date>`, `/runs/<trip>/<date>/connections/<sequence>` |
 
-The GTFS has three stop rows per station (`S8892007` parent, `8892007`, `8892007_10` platform). Only the station-level row is a core stop; the other two are removed before conversion and do not get identifiers, so there are no `…/stops/S…` or `…/stops/<uic>_<platform>` IRIs. The `stop` and `station` templates therefore produce the same IRI. Platforms use a fragment, which the converter's identity strategy cannot mint, so they are created by the iRail extension and always derive from the station IRI. The API's historical connection IRI `http://irail.be/connections/<hafas>/<departure date>/<vehicle>` and vehicle run IRI `http://irail.be/vehicle/<vehicle>/<date>` are **not** minted as entity IRIs: the 7 November 2026 feed has several scheduled trips with the same vehicle number on one day (IC 5130 from Bruxelles-Midi, for instance) and the registry rejects the collision. Minting `be.sncb` `vehicle`, `run` or `connection` IRIs needs dictionary context (route/trip short names); collectors obtain it from the pinned release rather than from the key alone.
+The GTFS has three stop rows per station (`S8892007` parent, `8892007`, `8892007_10` platform). Only the station-level row is a core stop; the other two are removed before conversion and do not get identifiers, so there are no `…/stops/S…` or `…/stops/<uic>_<platform>` IRIs. The `stop` and `station` templates therefore produce the same IRI. Platforms use a fragment, which the converter's identity strategy cannot mint, so they are created by the iRail extension and always derive from the station IRI. The API's historical connection IRI `http://irail.be/connections/<hafas>/<departure date>/<vehicle>` and vehicle run IRI `http://irail.be/vehicle/<vehicle>/<date>` are **not** minted as entity IRIs: the 7 November 2026 feed has several scheduled trips with the same vehicle number on one day (IC 5130 from Bruxelles-Midi, for instance) and the registry rejects the collision. Minting `nmbs-sncb` `vehicle`, `run` or `connection` IRIs needs dictionary context (route/trip short names); collectors obtain it from the pinned release rather than from the key alone.
 
 ## Configuration and expansion
 
 The registry has `strategyVersion: 1` (configuration grammar), `identityProfile: "irail-global-v1"` (identity contract), `identityBase`, `timeZone`, `bases`, `templates`, `resolve` and `sources`. These are separate from the Arrow format's version number. The checked-in registry contains every default template, including source, provider, station, agency, route, trip, run, call, connection, shape, unit and generic entity.
 
-Each source can override `identityBase` and `timeZone`. Its `bases`, `templates` and `resolve` maps merge by name over the global maps; a replaced template/resolver replaces that complete value. Defaults are UTC, with `Europe/Brussels` for `be.sncb` and the fixtures. Source metadata also declares collection channels and the station profile. A new operator needs a unique registry key; the helper permits syntactically valid unregistered keys for experimentation, while production builders must require registry membership.
+Each source can override `identityBase` and `timeZone`. Its `bases`, `templates` and `resolve` maps merge by name over the global maps; a replaced template/resolver replaces that complete value. Defaults are UTC, with `Europe/Brussels` for `nmbs-sncb` and the fixtures. Source metadata also declares collection channels and the station profile. A new operator needs a unique registry key; the helper permits syntactically valid unregistered keys for experimentation, while production builders must require registry membership.
 
 An illustrative source entry, added under `sources`, can select an existing station authority and derive opaque station keys:
 
@@ -121,11 +121,11 @@ import { identifiers, createIriStrategy, defaultIriConfiguration, IriRegistry }
   from './src/identifiers.ts';
 
 const registry = new IriRegistry(); // Share across all tables and sources in a build.
-const ids = identifiers('be.sncb', defaultIriConfiguration, registry);
+const ids = identifiers('nmbs-sncb', defaultIriConfiguration, registry);
 ids.call('IC518', 20261107, 10);
-// https://irail.be/id/be.sncb/runs/IC518/20261107/calls/10
+// https://irail.be/id/nmbs-sncb/runs/IC518/20261107/calls/10
 
-const strategy = createIriStrategy('be.sncb', defaultIriConfiguration, registry);
+const strategy = createIriStrategy('nmbs-sncb', defaultIriConfiguration, registry);
 strategy.mint('call', {
   trips: { key: 'IC518' },
   connection: { serviceDate: '20261107', stopSequence: 10 }

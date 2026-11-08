@@ -18,7 +18,7 @@ RIV endpoints: `dacs` (liveboards with platform and delay), `journey` (occupancy
 * About 108 KB per snapshot (25 KB gzipped); a full dataset (`incrementality` 0) with a header timestamp that advances every 30 s; GTFS-RT version 1.0.
 * 377 trip updates in the first sample: 372 scheduled, 5 `CANCELED` trips and 162 `SKIPPED` stop updates. Only TripUpdates: no vehicle positions and no alerts.
 * Every stop-time update has arrival/departure delay and absolute time. The `stop_id` is platform-level (`8866001_3`): the part after `_` is the platform, which maps to the platform IRI `<station IRI>#3` ([platforms.arrow](arrow-schemas.md#platformsarrow)). It exists only for stops with live updates.
-* `trip_id` equals the static GTFS `trip_id` (`88____:007::8200510:8814001:14:1442:20261108`), so the LC `tripTemplate` `https://irail.be/id/be.sncb/trips/{trip_id}` reproduces our trip IRIs. A `stopTemplate` does not (platform ids against station-level core stops); stop updates resolve through the iRail adapter instead.
+* `trip_id` equals the static GTFS `trip_id` (`88____:007::8200510:8814001:14:1442:20261108`), so the LC `tripTemplate` `https://irail.be/id/nmbs-sncb/trips/{trip_id}` reproduces our trip IRIs. A `stopTemplate` does not (platform ids against station-level core stops); stop updates resolve through the iRail adapter instead.
 
 ## Published GTFS-RT objects
 

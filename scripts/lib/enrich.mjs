@@ -128,7 +128,7 @@ export async function buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId
       root = stopById.get(root.parent_station);
       if (!root) throw new Error(`Unknown parent station of ${stop.stop_id}`);
     }
-    const verified = sourceId === 'be.sncb' && root.location_type === '1' ? STATION_ROOT.exec(root.stop_id) : null;
+    const verified = sourceId === 'nmbs-sncb' && root.location_type === '1' ? STATION_ROOT.exec(root.stop_id) : null;
     const hafas = NMBS_STOP_ID.exec(stop.stop_id)?.[1] ?? null;
     const stationIri = verified ? mint('station', { stops: { ...root, key: verified[1], uic: verified[1] } }, [verified[1]]) : stopMint(root);
     const station = curated.get(stationIri);

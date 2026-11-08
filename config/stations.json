@@ -5,5 +5,5 @@
   "file": "stations.csv",
   "license": "https://creativecommons.org/publicdomain/zero/1.0/",
   "description": "iRail stations: curated NMBS/SNCB and international station names in all languages, TAF/TAP and telegraph codes, country, coordinates, average stop times and official transfer times",
-  "notes": "Pinned by commit. The station URIs of this dataset (http://irail.be/stations/NMBS/00<hafas>) are the station IRIs minted for be.sncb, so rows join on IRI."
+  "notes": "Pinned by commit. The station URIs of this dataset (http://irail.be/stations/NMBS/00<hafas>) are the station IRIs minted for nmbs-sncb, so rows join on IRI."
 }

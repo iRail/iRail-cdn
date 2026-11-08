@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createIriStrategy } from '../src/identifiers.ts';
 
-test('be.sncb keeps the iRail API IRIs for stations and vehicles and a unique namespace for runs and connections', () => {
-  const sncb = createIriStrategy('be.sncb');
+test('nmbs-sncb keeps the iRail API IRIs for stations and vehicles and a unique namespace for runs and connections', () => {
+  const sncb = createIriStrategy('nmbs-sncb');
   assert.equal(sncb.mint('station', { stops: { key: '8814001', uic: '8814001' } }, ['8814001']), 'http://irail.be/stations/NMBS/008814001');
   // The station-level stop is the station: one identifier, the one iRail already uses.
   // (A registry refuses to mint one IRI under two logical kinds, so this uses a second strategy.)
-  const stops = createIriStrategy('be.sncb');
+  const stops = createIriStrategy('nmbs-sncb');
   assert.equal(stops.mint('stop', { stops: { key: '8814001' } }, ['8814001']), 'http://irail.be/stations/NMBS/008814001');
   assert.equal(stops.mint('stop', { stops: { key: '7015400' } }, ['7015400']), 'http://irail.be/stations/NMBS/007015400');
   assert.throws(() => stops.mint('station', { stops: { key: '8814001', uic: '8814001' } }, ['8814001']), /IRI collision/);
@@ -18,6 +18,6 @@ test('be.sncb keeps the iRail API IRIs for stations and vehicles and a unique na
   // Several scheduled trips share a vehicle number on one day, so runs/connections must not use vehicle/date IRIs.
   const key = '88____:007::8814001:8896008:6:1015:20261211';
   const run = sncb.mint('run', { trips: { key }, connection: { serviceDate: '20261109' } }, [key, '20261109']);
-  assert.equal(run, 'https://irail.be/id/be.sncb/runs/88____%3A007%3A%3A8814001%3A8896008%3A6%3A1015%3A20261211/20261109');
+  assert.equal(run, 'https://irail.be/id/nmbs-sncb/runs/88____%3A007%3A%3A8814001%3A8896008%3A6%3A1015%3A20261211/20261109');
   assert.ok(sncb.snapshot.bases.stations.startsWith('http://irail.be/stations/NMBS'));
 });

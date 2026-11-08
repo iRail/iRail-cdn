@@ -112,7 +112,7 @@ export async function buildSncb(options) {
   if (startDate > endDate) throw new Error(`The feed (${feed.start}..${feed.end}) does not cover the requested horizon ${startDate}..${endDate}`);
   const regions = options.regions ?? config.regions;
   const inputs = sha8(archive.sha256 ?? feed.version, await pipelineFingerprint(), converterInfo.commit, curated?.sha256 ?? null, realtime ?? null, strategyConfig, startDate, endDate, regions, prefix);
-  const releaseId = options.releaseId ?? `${sourceId.replace(/^[a-z]+\./u, '')}-${today}-${inputs}`;
+  const releaseId = options.releaseId ?? `${sourceId}-${today}-${inputs}`;
 
   if (options.previousDir) {
     const existing = path.join(path.resolve(options.previousDir), 'releases', releaseId);
@@ -160,7 +160,7 @@ export async function buildSncb(options) {
       notes: [
         'The source feed has no shapes.txt content; shapes stay unavailable rather than being inferred from station pairs.',
         'The core stops table has one stop per station (its IRI is the iRail station IRI); GTFS parent stations and platform stops are not core rows. Platforms are published in platforms.arrow as <station IRI>#<platform code>.',
-        'Connection IRIs use the stable https://irail.be/id/be.sncb/ namespace: several scheduled trips share a vehicle number on one day, so legacy vehicle/date connection IRIs are not unique.',
+        'Connection IRIs use the stable https://irail.be/id/nmbs-sncb/ namespace: the feed carries some trains as two trip records on one day (same stops and times, different block/version; 739 of ~222,000 train-days in the Nov 2026 horizon) and reuses bus numbers for different runs, so legacy vehicle/date connection IRIs are not unique.',
         'stop_time_overrides.txt (platform overrides) is not read by the converter and is not yet published.',
       ],
     },

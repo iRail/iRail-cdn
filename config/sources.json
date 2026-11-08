@@ -24,7 +24,7 @@
     "serviceDay": "format(connection.serviceDate, 'yyyyMMdd')"
   },
   "sources": {
-    "be.sncb": {
+    "nmbs-sncb": {
       "name": "NMBS/SNCB",
       "channels": [
         "gtfs-static",
@@ -36,8 +36,7 @@
       "stationProfile": "irail-nmbs",
       "bases": {
         "stations": "http://irail.be/stations/NMBS",
-        "vehicles": "http://irail.be/vehicle",
-        "connections": "http://irail.be/connections"
+        "vehicles": "http://irail.be/vehicle"
       },
       "templates": {
         "station": "{bases.stations}/{stationCode}",
@@ -64,7 +63,7 @@
           ]
         }
       },
-      "notes": "One logical namespace across collection channels. A station and its station-level stop are the same thing: http://irail.be/stations/NMBS/00<hafas>, the identifier iRail already uses (stop and station templates agree). Platforms are not stops of the routing core; they are identified in an extension as <station IRI>#<platform>. Vehicles are http://irail.be/vehicle/<label><number>. Runs, calls, connections, trips and routes stay under https://irail.be/id/be.sncb/: the GTFS contains several scheduled trips with the same vehicle number on the same day, so vehicle/date and legacy connection IRIs are not unique."
+      "notes": "One logical namespace across collection channels. A station and its station-level stop are the same thing: http://irail.be/stations/NMBS/00<hafas>, the identifier iRail already uses (stop and station templates agree). Platforms are not stops of the routing core; they are identified in an extension as <station IRI>#<platform>. Vehicles are http://irail.be/vehicle/<label><number>. Runs, calls, connections, trips and routes stay under https://irail.be/id/nmbs-sncb/: the GTFS carries some trains as two trip records on the same day (same stops and times, different block/version) and reuses bus numbers for different runs, so vehicle/date and legacy connection IRIs are not unique."
     },
     "demo.fixture": {
       "name": "Synthetic fixtures",
