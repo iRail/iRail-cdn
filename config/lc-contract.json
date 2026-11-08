@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "2-alpha",
+  "specification": "https://linkedconnections.org/specification/2-0-alpha",
+  "revision": "f2168aecd8108742add7f4942239a1e02710ecd8",
+  "artifacts": {
+    "schemas": {
+      "path": "specs/lc-core-schemas.json",
+      "sha256": "8128037fc270ef41770fa011ab9b2d1b85643f9cb517a11e3a37c2e272ac7963"
+    },
+    "context": {
+      "path": "specs/lc-context.jsonld",
+      "sha256": "4b04b8b15a736d440d9b0afe5f4e64e929a42221fdcca90604371b328068bacd"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "irail-cdn",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NMBS/SNCB timetable as Linked Connections 2.0-alpha: GitHub Actions build and GitHub Pages publication",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "fixtures": "node scripts/build-fixtures.mjs",
+    "build:sncb": "node scripts/build-sncb.mjs",
+    "assemble:pages": "node scripts/assemble-pages.mjs",
+    "validate:release": "node scripts/validate-release.mjs",
+    "serve:planned": "node scripts/serve-site.mjs build/site",
+    "check:planned": "npm run fixtures && node --test --test-timeout=300000 test/contracts.test.mjs test/sncb-identity.test.mjs test/planned.test.mjs",
+    "check": "npm run check:planned"
+  },
+  "dependencies": {
+    "apache-arrow": "^21.0.0",
+    "csv-parse": "^5.6.0",
+    "fflate": "^0.8.2"
+  }
+}

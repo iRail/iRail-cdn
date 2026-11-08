@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  # Credential-free planned-data checks: contracts, fixture conversion with the pinned gtfs2lc, validation,
+  # Pages assembly and the independent reader. No Wrangler, Miniflare or Cloudflare binding is used.
+  planned:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Read converter pin
+        id: pin
+        run: |
+          echo "repository=$(jq -r '.repository | sub("https://github.com/";"") | sub("\\.git$";"")' config/converter.json)" >> "$GITHUB_OUTPUT"
+          echo "commit=$(jq -r .commit config/converter.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: .gtfs2lc
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts
+        working-directory: .gtfs2lc
+      - run: npm run check:planned
+        env:
+          GTFS2LC_DIR: ${{ github.workspace }}/.gtfs2lc
+          REQUIRE_CONVERTER: '1'

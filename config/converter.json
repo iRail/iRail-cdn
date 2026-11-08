@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/linkedconnections/gtfs2lc.git",
+  "branch": "feat-arrow",
+  "commit": "bb4c859e4c79857736bb00dd33a402ce2b171013",
+  "subject": "Arrow LC2.0 version",
+  "profile": "irail-cdn-v1",
+  "notes": "Frozen by commit, never by branch name. The commit contains the LC 2-alpha core (lib/arrow/definitions.json) that matches config/lc-contract.json; its package-lock.json pins the converter dependencies. Release validation re-checks every produced file against specs/lc-core-schemas.json."
+}

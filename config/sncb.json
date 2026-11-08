@@ -1,0 +1,31 @@
+{
+  "sourceId": "be.sncb",
+  "name": "NMBS/SNCB",
+  "gtfs": {
+    "url": "https://sncb-opendata.hafas.de/gtfs/static/c21ac6758dd25af84cca5b707f3cb3de",
+    "attribution": "NMBS/SNCB static GTFS via Belgian Mobility open data"
+  },
+  "horizon": {
+    "daysBack": 2,
+    "daysForward": 62
+  },
+  "regions": 1,
+  "license": null,
+  "rights": "Timetable data by NMBS/SNCB (open data). Converted to Linked Connections 2.0-alpha by iRail.",
+  "retention": {
+    "maxReleases": 2,
+    "maxSiteBytes": 950000000
+  },
+  "notes": "license stays null until the open-data licence IRI of the dataset is confirmed; the converter does not infer legal conditions. regions=1 publishes one connection partition per six-hour bucket (about 260 pages for 65 days); raise it after measuring client scan cost.",
+  "measurements": {
+    "measuredOn": "2026-11-08",
+    "horizon": "2026-11-06..2027-01-09 (65 days)",
+    "regions": 4,
+    "connections": 2718314,
+    "pages": 1046,
+    "releaseBytes": 459082402,
+    "conversionSeconds": 204,
+    "converterPeakRssMiB": 4587,
+    "note": "Measured locally with gtfs2lc bb4c859; a GitHub-hosted runner must be re-measured. Two such releases (~918 MB) are the most that fit the Pages 1 GB ceiling, so retention is bounded by bytes first."
+  }
+}

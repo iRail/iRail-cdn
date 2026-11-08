@@ -1,0 +1,2 @@
+feed_id,feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version,conv_rev,plan_rev,feed_contact_url
+0,Fixture Rail,https://example.org/,fr,20261001,20261231,2026-11-07-fixture,1.0,,https://example.org/

@@ -1,0 +1,72 @@
+{
+  "strategyVersion": 1,
+  "identityProfile": "irail-global-v1",
+  "identityBase": "https://irail.be/id",
+  "timeZone": "UTC",
+  "bases": {},
+  "templates": {
+    "source": "{base}/{sourceId}/source",
+    "provider": "{base}/{sourceId}/providers/{provider.key}",
+    "stop": "{base}/{sourceId}/stops/{stops.key}",
+    "station": "{base}/{sourceId}/stations/{stops.key}",
+    "route": "{base}/{sourceId}/routes/{routes.key}",
+    "agency": "{base}/{sourceId}/agencies/{agency.key}",
+    "trip": "{base}/{sourceId}/trips/{trips.key}",
+    "run": "{base}/{sourceId}/runs/{trips.key}/{serviceDay}",
+    "call": "{base}/{sourceId}/runs/{trips.key}/{serviceDay}/calls/{connection.stopSequence}",
+    "connection": "{base}/{sourceId}/runs/{trips.key}/{serviceDay}/connections/{connection.stopSequence}",
+    "shape": "{base}/{sourceId}/shapes/{shapes.key}",
+    "unit": "{base}/{sourceId}/units/{unit.key}",
+    "entity": "{base}/{sourceId}/{entity.kind}/{entity.key}",
+    "vehicle": "{base}/{sourceId}/vehicles/{vehicle.key}"
+  },
+  "resolve": {
+    "serviceDay": "format(connection.serviceDate, 'yyyyMMdd')"
+  },
+  "sources": {
+    "be.sncb": {
+      "name": "NMBS/SNCB",
+      "channels": [
+        "gtfs-static",
+        "gtfs-rt",
+        "riv",
+        "rss"
+      ],
+      "timeZone": "Europe/Brussels",
+      "stationProfile": "irail-nmbs",
+      "bases": {
+        "stations": "http://irail.be/stations/NMBS",
+        "vehicles": "http://irail.be/vehicle",
+        "connections": "http://irail.be/connections"
+      },
+      "templates": {
+        "station": "{bases.stations}/{stationCode}",
+        "vehicle": "{bases.vehicles}/{vehicleId}"
+      },
+      "resolve": {
+        "stationCode": {
+          "padStart": {
+            "value": "stops.uic",
+            "length": 9,
+            "fill": "0"
+          }
+        },
+        "vehicleId": {
+          "concat": [
+            "routes.route_short_name",
+            "trips.trip_short_name"
+          ]
+        }
+      },
+      "notes": "One logical namespace across collection channels. Stations keep the iRail API IRI http://irail.be/stations/NMBS/00<hafas>, and vehicles http://irail.be/vehicle/<label><number>. Runs, calls and connections stay under https://irail.be/id/be.sncb/: the GTFS contains several scheduled trips with the same vehicle number on the same day, so vehicle/date and legacy connection IRIs are not unique."
+    },
+    "demo.fixture": {
+      "name": "Synthetic fixtures",
+      "channels": [
+        "fixture"
+      ],
+      "timeZone": "Europe/Brussels",
+      "stationProfile": "source-scoped"
+    }
+  }
+}

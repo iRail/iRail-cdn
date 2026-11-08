@@ -1,0 +1,4 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+1,FIXTURE/RAIL,IC,Alpha -- Charlie,,103,,,
+2,FIXTURE/RAIL,L,Bravo -- Delta,,100,,,
+3,FIXTURE/RAIL,EXT,Alpha -- Abroad,,102,,,

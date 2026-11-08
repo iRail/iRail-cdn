@@ -1,0 +1,175 @@
+name: Publish planned data
+
+# Builds the NMBS/SNCB Linked Connections 2.0-alpha dump with the pinned gtfs2lc and publishes it, together with
+# retained earlier releases, as one complete GitHub Pages deployment. No Cloudflare account, Wrangler or RIV
+# credential is involved. Enable it once: Settings -> Pages -> Source: "GitHub Actions".
+on:
+  schedule:
+    - cron: '25 7 * * *' # the SNCB GTFS is regenerated around 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      gtfs_url:
+        description: 'Override the GTFS archive URL (defaults to the repository variable SNCB_GTFS_URL, then config/sncb.json)'
+        required: false
+      days_back:
+        description: 'Service days before today'
+        required: false
+      days_forward:
+        description: 'Service days after today'
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - 'config/**'
+      - 'scripts/**'
+      - 'specs/**'
+      - 'src/iri-strategy.ts'
+      - 'fixtures/**'
+      - 'package*.json'
+      - '.github/workflows/publish-planned.yml'
+
+# One publication at a time, and never cancel a running deployment: an older run must not overwrite a newer one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Contract and fixture checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Read converter pin
+        id: pin
+        run: |
+          echo "repository=$(jq -r '.repository | sub("https://github.com/";"") | sub("\\.git$";"")' config/converter.json)" >> "$GITHUB_OUTPUT"
+          echo "commit=$(jq -r .commit config/converter.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: .gtfs2lc
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts
+        working-directory: .gtfs2lc
+      - run: npm run check:planned
+        env:
+          GTFS2LC_DIR: ${{ github.workspace }}/.gtfs2lc
+          REQUIRE_CONVERTER: '1'
+
+  build:
+    name: Convert, validate and assemble
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      status: ${{ steps.build.outputs.status }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Read converter pin
+        id: pin
+        run: |
+          echo "repository=$(jq -r '.repository | sub("https://github.com/";"") | sub("\\.git$";"")' config/converter.json)" >> "$GITHUB_OUTPUT"
+          echo "commit=$(jq -r .commit config/converter.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: .gtfs2lc
+      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts
+        working-directory: .gtfs2lc
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - name: Restore retained releases from the deployed site
+        run: node scripts/restore-pages.mjs --base-url "${{ steps.pages.outputs.base_url }}" --out build/previous
+      - name: Build release
+        id: build
+        env:
+          GTFS2LC_DIR: ${{ github.workspace }}/.gtfs2lc
+          GTFS_URL_OVERRIDE: ${{ inputs.gtfs_url || vars.SNCB_GTFS_URL }}
+          DAYS_BACK: ${{ inputs.days_back }}
+          DAYS_FORWARD: ${{ inputs.days_forward }}
+        run: |
+          args=(--prefix "${{ steps.pages.outputs.base_path }}" --previous build/previous --work build/work --staging build/staging --memory-mb 12000)
+          [ -n "$GTFS_URL_OVERRIDE" ] && args+=(--url "$GTFS_URL_OVERRIDE")
+          [ -n "$DAYS_BACK" ] && args+=(--days-back "$DAYS_BACK")
+          [ -n "$DAYS_FORWARD" ] && args+=(--days-forward "$DAYS_FORWARD")
+          node scripts/build-sncb.mjs "${args[@]}" > build/result.json
+          cat build/result.json
+          echo "status=$(jq -r .status build/result.json)" >> "$GITHUB_OUTPUT"
+      - name: Assemble the complete Pages site
+        if: steps.build.outputs.status == 'built'
+        run: >
+          node scripts/assemble-pages.mjs --staging build/staging --previous build/previous --out build/site
+          --prefix "${{ steps.pages.outputs.base_path }}" --repository "${{ github.repository }}"
+      - name: Report measured size
+        if: steps.build.outputs.status == 'built'
+        run: |
+          {
+            echo '## Release'
+            echo
+            echo '```json'
+            jq '{releaseId, startDate, endDate, regions, pages, rows, bytes, seconds, feed, converter}' build/staging/build-result.json
+            echo '```'
+            echo
+            echo "Site size: $(du -sh build/site | cut -f1) (budget in config/sncb.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.build.outputs.status == 'built'
+        with:
+          path: build/site
+      - name: Rollback artifact (verified, immutable site snapshot)
+        if: steps.build.outputs.status == 'built'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-${{ github.run_id }}
+          path: build/site
+          retention-days: 30
+          compression-level: 0
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.status == 'built'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify:
+    name: Native Pages HTTP check
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # Reports GET/HEAD, CORS, media-type and caching gaps of the real host. It is informational until the
+      # gaps are resolved: a green deployment does not by itself establish LC HTTP conformance.
+      - run: node scripts/check-pages.mjs "${{ needs.deploy.outputs.page_url }}" --summary "$GITHUB_STEP_SUMMARY"
+        continue-on-error: true

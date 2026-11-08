@@ -1,0 +1,40 @@
+{
+  "@context": [
+    "https://linkedconnections.org/specification/2-0-alpha/context.jsonld",
+    {
+      "irail": "https://irail.be/vocab/"
+    }
+  ],
+  "@id": "/releases/demo-lc2-alpha/manifest.jsonld",
+  "@type": "Timetable",
+  "schemaVersion": "2-alpha",
+  "releaseId": "demo-lc2-alpha",
+  "generatedAt": "2026-11-07T06:00:00Z",
+  "timeZone": "Europe/Brussels",
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "rights": "Synthetic test data; no SNCB observations",
+  "coverageStart": "2026-11-07T08:00:00Z",
+  "coverageEnd": "2026-11-07T08:25:01Z",
+  "stops": "/releases/demo-lc2-alpha/stops.arrow",
+  "trips": "/releases/demo-lc2-alpha/trips.arrow",
+  "routes": "/releases/demo-lc2-alpha/routes.arrow",
+  "transfers": "/releases/demo-lc2-alpha/transfers.arrow",
+  "connections": {
+    "@type": "ConnectionCollection",
+    "pages": [
+      {
+        "@id": "/releases/demo-lc2-alpha/connections.arrow",
+        "epochSeconds": 1794031200,
+        "region": "https://irail.be/id/demo.fixture/regions/all",
+        "arrivalRegions": [
+          "https://irail.be/id/demo.fixture/regions/all"
+        ],
+        "minDepartureTime": "2026-11-07T08:00:00Z",
+        "maxDepartureTime": "2026-11-07T08:15:00Z"
+      }
+    ]
+  },
+  "irail:extensions": {
+    "@id": "/releases/demo-lc2-alpha/irail.json"
+  }
+}

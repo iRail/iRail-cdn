@@ -1,0 +1,158 @@
+// Builds one validated NMBS/SNCB LC2-alpha release into a staging directory:
+// archive -> extracted copy -> pinned gtfs2lc -> iRail static enrichment -> integrity catalog -> validation.
+// The result is a staging tree (manifest.jsonld + releases/<id>/) for scripts/assemble-pages.mjs.
+import { createHash } from 'node:crypto';
+import { createWriteStream } from 'node:fs';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { parseArgs } from 'node:util';
+import { pathToFileURL } from 'node:url';
+import { parse } from 'csv-parse/sync';
+import { convertGtfs, extractArchive, verifyConverter } from './convert-gtfs.mjs';
+import { buildEnrichment } from './lib/enrich.mjs';
+import { finalizeRelease, releaseSize } from './lib/release.mjs';
+import { addDays, brusselsDate, formatBytes, normalizePrefix, readJson, sha256File } from './lib/util.mjs';
+import { validateRelease } from './validate-release.mjs';
+
+const root = path.resolve(import.meta.dirname, '..');
+const sha8 = (...parts) => createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 8);
+
+export async function downloadArchive(url, file, { fetcher = fetch, maxBytes = 1_000_000_000 } = {}) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') throw new Error('The GTFS archive must be fetched over HTTPS');
+  const response = await fetcher(url, { redirect: 'follow' });
+  if (!response.ok || !response.body) throw new Error(`GTFS download failed: HTTP ${response.status}`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(file));
+  const { size } = await stat(file);
+  if (size < 1024 || size > maxBytes) throw new Error(`GTFS archive has an implausible size: ${size} bytes`);
+  const head = (await readFile(file)).subarray(0, 4).toString('latin1');
+  if (!head.startsWith('PK')) throw new Error('GTFS download is not a zip archive');
+  return file;
+}
+
+async function feedWindow(gtfsDir) {
+  const text = await readFile(path.join(gtfsDir, 'feed_info.txt'), 'utf8').catch(() => '');
+  const row = text ? parse(text, { columns: true, bom: true, skip_empty_lines: true })[0] ?? {} : {};
+  return { version: row.feed_version || null, start: row.feed_start_date || null, end: row.feed_end_date || null, publisher: row.feed_publisher_name || null };
+}
+
+async function countRows(gtfsDir, name) {
+  const text = await readFile(path.join(gtfsDir, name), 'utf8').catch(() => '');
+  return text ? parse(text, { columns: true, bom: true, skip_empty_lines: true }).length : 0;
+}
+
+/**
+ * @param {object} options
+ * @param {string} [options.archive] local GTFS zip; otherwise `config.gtfs.url` is downloaded
+ * @param {string} [options.gtfsDir] an already extracted directory (tests); copied by the caller if it must stay pristine
+ */
+export async function buildSncb(options) {
+  const started = Date.now();
+  const config = await readJson(path.join(root, 'config/sncb.json'));
+  const pin = await readJson(path.join(root, 'config/converter.json'));
+  const strategyPath = path.join(root, 'config/sources.json');
+  const strategyConfig = await readJson(strategyPath);
+  const prefix = normalizePrefix(options.prefix ?? '');
+  const sourceId = config.sourceId;
+  const workDir = path.resolve(options.workDir ?? 'build/work');
+  const stagingDir = path.resolve(options.stagingDir ?? 'build/staging');
+  const converterDir = path.resolve(options.converterDir ?? process.env.GTFS2LC_DIR ?? path.join(root, '..', 'gtfs2lc'));
+  await verifyConverter(converterDir, pin, { allowUnpinned: options.allowUnpinned });
+
+  let archive = { sha256: null, byteLength: null };
+  let gtfsDir = options.gtfsDir ? path.resolve(options.gtfsDir) : path.join(workDir, 'gtfs');
+  if (!options.gtfsDir) {
+    // The converter normalizes the extracted files in place; the archive itself is never modified.
+    let file = options.archive ? path.resolve(options.archive) : null;
+    if (!file) file = await downloadArchive(options.url ?? config.gtfs.url, path.join(workDir, 'gtfs.zip'));
+    archive = await extractArchive(file, gtfsDir);
+    archive.sha256 = await sha256File(file);
+  }
+  const feed = await feedWindow(gtfsDir);
+  const today = options.today ?? brusselsDate();
+  const horizon = config.horizon;
+  let startDate = options.startDate ?? addDays(today, -(options.daysBack ?? horizon.daysBack));
+  let endDate = options.endDate ?? addDays(today, options.daysForward ?? horizon.daysForward);
+  // Publish the coverage the source really has instead of a window it cannot supply.
+  if (feed.start && startDate < feed.start) startDate = feed.start;
+  if (feed.end && endDate > feed.end) endDate = feed.end;
+  if (startDate > endDate) throw new Error(`The feed (${feed.start}..${feed.end}) does not cover the requested horizon ${startDate}..${endDate}`);
+  const regions = options.regions ?? config.regions;
+  const inputs = sha8(archive.sha256 ?? feed.version, pin.commit, strategyConfig, startDate, endDate, regions, prefix);
+  const releaseId = options.releaseId ?? `${sourceId.replace(/^[a-z]+\./u, '')}-${today}-${inputs}`;
+
+  if (options.previousDir) {
+    const existing = path.join(path.resolve(options.previousDir), 'releases', releaseId);
+    if (await stat(existing).then(() => true, () => false)) return { status: 'unchanged', releaseId, reason: 'identical inputs are already published' };
+  }
+
+  console.error(`Converting ${startDate}..${endDate} as ${releaseId} (feed ${feed.version ?? 'unversioned'})`);
+  const { converter, releaseDir } = await convertGtfs({
+    gtfsDir, stagingDir, converterDir, pin, strategyPath, sourceId, releaseId, startDate, endDate, urlPrefix: prefix, regions,
+    license: config.license ?? undefined, rights: config.rights ?? undefined, memoryMb: options.memoryMb, allowUnpinned: options.allowUnpinned,
+  });
+  const afterConversion = Date.now();
+  const enrichment = await buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig });
+  const frequencies = await countRows(gtfsDir, 'frequencies.txt');
+  const pathways = await countRows(gtfsDir, 'pathways.txt');
+  const finalized = await finalizeRelease({
+    stagingDir, releaseId, prefix, sourceId, strategy: enrichment.strategy, strategySha256: enrichment.strategySha256,
+    source: {
+      id: 'gtfs-static', description: config.gtfs.attribution, rights: config.rights ?? null, license: config.license ?? null,
+      archive: { sha256: archive.sha256, byteLength: archive.byteLength },
+      feed: { version: feed.version, publisher: feed.publisher, startDate: feed.start, endDate: feed.end },
+      converter: { name: 'gtfs2lc', repository: pin.repository, branch: pin.branch, commit: converter.commit, pinnedCommit: pin.commit, version: converter.version, profile: pin.profile },
+    },
+    capabilities: {
+      connections: 'available', stops: 'available', trips: 'available', routes: 'available', transfers: 'available',
+      stopEnrichment: 'available', tripEnrichment: 'available', routeEnrichment: 'available',
+      connectionEnrichment: 'unavailable', transferEnrichment: 'unavailable', shapes: 'unavailable',
+      realtime: 'unconfigured', compositions: 'unavailable', occupancy: 'unavailable', alerts: 'unavailable', stopStatus: 'unavailable', delaysCancellations: 'unavailable',
+    },
+    diagnostics: {
+      unsupportedGtfs: { frequencies, pathways },
+      notes: [
+        'The source feed has no shapes.txt content; shapes stay unavailable rather than being inferred from station pairs.',
+        'Connection IRIs use the stable https://irail.be/id/be.sncb/ namespace: several scheduled trips share a vehicle number on one day, so legacy vehicle/date connection IRIs are not unique.',
+        'stop_time_overrides.txt (platform overrides) is not read by the converter and is not yet published.',
+      ],
+    },
+  });
+  const report = await validateRelease(stagingDir, releaseId, { prefix, deep: true });
+  const bytes = await releaseSize(releaseDir);
+  const result = {
+    status: 'built', releaseId, prefix, startDate, endDate, regions, generatedAt: finalized.manifest.generatedAt, bytes,
+    rows: report.rows, pages: report.pages, maxPageRows: report.maxPageRows,
+    archive, feed, converter: { commit: converter.commit, pinned: converter.pinned },
+    seconds: { conversion: (afterConversion - started) / 1000, total: (Date.now() - started) / 1000 },
+  };
+  await writeFile(path.join(stagingDir, 'build-result.json'), `${JSON.stringify(result, null, 2)}\n`);
+  console.error(`Built ${releaseId}: ${formatBytes(bytes)}, ${report.rows.connections} connections in ${report.pages} pages (${result.seconds.total}s)`);
+  return result;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const { values } = parseArgs({ options: {
+    archive: { type: 'string' }, url: { type: 'string' }, 'gtfs-dir': { type: 'string' }, converter: { type: 'string' },
+    work: { type: 'string' }, staging: { type: 'string' }, previous: { type: 'string' }, prefix: { type: 'string' },
+    'start-date': { type: 'string' }, 'end-date': { type: 'string' }, 'days-back': { type: 'string' }, 'days-forward': { type: 'string' },
+    'release-id': { type: 'string' }, regions: { type: 'string' }, 'memory-mb': { type: 'string' }, 'allow-unpinned': { type: 'boolean' },
+  } });
+  const number = (value) => (value === undefined ? undefined : Number(value));
+  try {
+    const result = await buildSncb({
+      archive: values.archive, url: values.url, gtfsDir: values['gtfs-dir'], converterDir: values.converter, workDir: values.work, stagingDir: values.staging,
+      previousDir: values.previous, prefix: values.prefix, startDate: values['start-date'], endDate: values['end-date'],
+      daysBack: number(values['days-back']), daysForward: number(values['days-forward']), releaseId: values['release-id'],
+      regions: number(values.regions), memoryMb: number(values['memory-mb']), allowUnpinned: values['allow-unpinned'],
+    });
+    console.log(JSON.stringify(result));
+    if (result.status === 'unchanged') await rm(path.resolve(values.staging ?? 'build/staging'), { recursive: true, force: true });
+  } catch (error) {
+    console.error(error.stack ?? error);
+    process.exit(1);
+  }
+}

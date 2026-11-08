@@ -1,0 +1,159 @@
+{
+  "format": "irail-cdn-extensions",
+  "version": "1-alpha",
+  "status": "demo",
+  "sourceId": "demo.fixture",
+  "identityProfile": "irail-global-v1",
+  "identityBase": "https://irail.be/id",
+  "releaseId": "demo-lc2-alpha",
+  "generatedAt": "2026-11-07T06:00:00Z",
+  "sources": [
+    {
+      "id": "fixture",
+      "description": "Synthetic test data; no SNCB observations",
+      "license": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ],
+  "serviceDates": {
+    "start": 20261107,
+    "end": 20261107
+  },
+  "partitioning": {
+    "timePartitionSeconds": 21600,
+    "maxRows": 50000,
+    "regions": [
+      {
+        "iri": "https://irail.be/id/demo.fixture/regions/all"
+      }
+    ]
+  },
+  "capabilities": {
+    "connections": "demo",
+    "realtime": "unconfigured",
+    "compositions": "unavailable",
+    "occupancy": "unavailable",
+    "alerts": "unavailable"
+  },
+  "files": {
+    "connections": [
+      {
+        "path": "/releases/demo-lc2-alpha/connections.arrow",
+        "rowCount": 3,
+        "byteLength": 2066,
+        "sha256": "3ef9b99f0a04bd31697d6d6839b11fefab5d586b6033228c90c2de461e7c1b92",
+        "mediaType": "application/vnd.apache.arrow.file"
+      }
+    ],
+    "stops": {
+      "path": "/releases/demo-lc2-alpha/stops.arrow",
+      "rowCount": 3,
+      "byteLength": 1578,
+      "sha256": "d93feeb796d1e8eae4adc7a335f790448932252add57021605701d334ee1f35f",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "trips": {
+      "path": "/releases/demo-lc2-alpha/trips.arrow",
+      "rowCount": 2,
+      "byteLength": 1042,
+      "sha256": "8086de9d6db8232be858235f5362d6726891804d03d64b53dc44915bb6071fc0",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "routes": {
+      "path": "/releases/demo-lc2-alpha/routes.arrow",
+      "rowCount": 1,
+      "byteLength": 1010,
+      "sha256": "cf241c6185522938b5091eef600b48c46078e80a6c3425508213d59234fd3a57",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "transfers": {
+      "path": "/releases/demo-lc2-alpha/transfers.arrow",
+      "rowCount": 1,
+      "byteLength": 1610,
+      "sha256": "45df24ea1a5c471882e93338412650fd0382d42597911c97fcd79be297e4339b",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "stopEnrichment": {
+      "path": "/releases/demo-lc2-alpha/stop-enrichment.arrow",
+      "rowCount": 3,
+      "byteLength": 4154,
+      "sha256": "91cc98a56ac35fe459d60c5757cb99d6d3c8dcaac61b19a8f2a0946f703b8e66",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "tripEnrichment": {
+      "path": "/releases/demo-lc2-alpha/trip-enrichment.arrow",
+      "rowCount": 2,
+      "byteLength": 2650,
+      "sha256": "ce57bca1979b57c3f6bc8536f6f38c9030b1901720864f2ca2cb02540324e56f",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "routeEnrichment": {
+      "path": "/releases/demo-lc2-alpha/route-enrichment.arrow",
+      "rowCount": 1,
+      "byteLength": 1426,
+      "sha256": "668645beb188b6d17c67a816f4c288a6a8e9b1dfab59ba1490c009b9ad94928f",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "connectionEnrichment": {
+      "path": "/releases/demo-lc2-alpha/connection-enrichment.arrow",
+      "rowCount": 3,
+      "byteLength": 3410,
+      "sha256": "e9f9bb0f29575e90219a158ed34e77f6da03d1852035c3ae416c8a4927788994",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "transferEnrichment": {
+      "path": "/releases/demo-lc2-alpha/transfer-enrichment.arrow",
+      "rowCount": 1,
+      "byteLength": 1898,
+      "sha256": "8af8cd20d9fa1250bb3251743f04d74394ff818f05a26dbff15ffed43ba92c38",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "shapes": {
+      "path": "/releases/demo-lc2-alpha/shapes.arrow",
+      "rowCount": 1,
+      "byteLength": 1290,
+      "sha256": "fc5407c320df87a2c953b09d646855dd0ac06f6a0485ee7411828b5628191330",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "shapePoints": {
+      "path": "/releases/demo-lc2-alpha/shapes/demo.arrow",
+      "rowCount": 3,
+      "byteLength": 1634,
+      "sha256": "ce648c8e5a2f28415ff01b6c460f235a2cb9e91aee9251a225361d93bdaa1386",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "compositions": {
+      "path": "/releases/demo-lc2-alpha/compositions.arrow",
+      "rowCount": 0,
+      "byteLength": 5530,
+      "sha256": "34c54c449962af32e716681433c065a0148ad3d90970af2a0735b341edbd17c6",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "occupancy": {
+      "path": "/releases/demo-lc2-alpha/occupancy.arrow",
+      "rowCount": 0,
+      "byteLength": 1738,
+      "sha256": "538024c654e5793e26ee1ad321255e0729239bcbab7bf03e92831d56be99c720",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "alerts": {
+      "path": "/releases/demo-lc2-alpha/alerts.arrow",
+      "rowCount": 0,
+      "byteLength": 2258,
+      "sha256": "8606b4f8fd15f26e03046b67b21206d505480b49bfce6c7276b868955e185a52",
+      "mediaType": "application/vnd.apache.arrow.file"
+    },
+    "alertEntities": {
+      "path": "/releases/demo-lc2-alpha/alert-entities.arrow",
+      "rowCount": 0,
+      "byteLength": 2018,
+      "sha256": "88cc9b6e79a05083b9ab04e318f7f64dca02ac7a1e2d36c0b03891c7bd23b4b3",
+      "mediaType": "application/vnd.apache.arrow.file"
+    }
+  },
+  "identityStrategy": {
+    "path": "/releases/demo-lc2-alpha/identity-strategy.json",
+    "byteLength": 1094,
+    "sha256": "8a42b4c87edc73b57986436cd3e829fdcfa73b7711190b72195af738e98b86d5",
+    "mediaType": "application/json"
+  }
+}

@@ -1,0 +1,6 @@
+table_name,field_name,language,translation,record_id,record_sub_id,field_value
+stops,stop_name,nl,Fixture Alfa,,,Fixture Alpha
+stops,stop_name,de,Fixture Alpha,,,Fixture Alpha
+stops,stop_name,en,Fixture Alpha,,,Fixture Alpha
+stops,stop_name,nl,Fixture Bravo,,,Fixture Bravo
+stops,stop_name,en,Fixture Bravo,,,Fixture Bravo
