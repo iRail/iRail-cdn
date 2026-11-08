@@ -9,6 +9,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { tableFromIPC } from 'apache-arrow';
 import { parse } from 'csv-parse/sync';
 import { convertGtfs, extractArchive, verifyConverter } from './convert-gtfs.mjs';
 import { buildEnrichment } from './lib/enrich.mjs';
@@ -51,6 +52,14 @@ async function feedWindow(gtfsDir) {
 async function countRows(gtfsDir, name) {
   const text = await readFile(path.join(gtfsDir, name), 'utf8').catch(() => '');
   return text ? parse(text, { columns: true, bom: true, skip_empty_lines: true }).length : 0;
+}
+
+/** The converter's provenance for in-seat (type 4) transfers derived from block_id, stored as transfers.arrow schema metadata. */
+async function readInSeatDerivation(releaseDir) {
+  const table = tableFromIPC(await readFile(path.join(releaseDir, 'transfers.arrow')));
+  const text = table.schema.metadata.get('inSeatTransferDerivation');
+  if (text === undefined) return undefined;
+  try { return JSON.parse(text); } catch { throw new Error('transfers.arrow has an unreadable inSeatTransferDerivation metadata value'); }
 }
 
 /**
@@ -124,6 +133,7 @@ export async function buildSncb(options) {
     gtfsDir, stagingDir, converterDir, converterSource: pin, strategyPath, sourceId, releaseId, startDate, endDate, urlPrefix: prefix, regions,
     license: config.license ?? undefined, rights: config.rights ?? undefined, realtimePath, memoryMb: options.memoryMb, allowModified: options.allowModified,
   });
+  const inSeatTransfers = await readInSeatDerivation(releaseDir);
   const afterConversion = Date.now();
   const enrichment = await buildEnrichment({ gtfsDir, releaseDir, releaseId, sourceId, strategyConfig, stations: curated?.stations, platforms: reduced.platforms });
   const frequencies = await countRows(gtfsDir, 'frequencies.txt');
@@ -154,6 +164,7 @@ export async function buildSncb(options) {
     },
     diagnostics: {
       unsupportedGtfs: { frequencies, pathways },
+      ...(inSeatTransfers ? { inSeatTransfers: { ...inSeatTransfers, rule: 'type-4 links derived by the converter from same-service-date block_id chains (same stop_id, gap within maxGapSeconds); the operator publishes no explicit in-seat rules. Splits and joins are not derived.' } } : {}),
       stopReduction: { stations: reduced.stations, droppedParents: reduced.dropped.parents, platforms: reduced.dropped.platforms, remappedTransfers: reduced.remappedTransfers },
       ...(enrichment.headsignDiagnostics ? { headsigns: enrichment.headsignDiagnostics } : {}),
       ...(enrichment.stationDiagnostics ? { stations: enrichment.stationDiagnostics } : {}),

@@ -71,6 +71,7 @@ test('fixture GTFS converts through gtfs2lc into a validated release', { skip },
   assert.deepEqual(extensions.diagnostics.stopReduction, { stations: 5, droppedParents: 4, platforms: 4, remappedTransfers: 2 });
   assert.equal(extensions.capabilities.platforms, 'available');
   assert.deepEqual(extensions.diagnostics.unsupportedGtfs, { frequencies: 0, pathways: 0 });
+  assert.deepEqual({ ...extensions.diagnostics.inSeatTransfers, rule: undefined }, { enabled: true, maxGapSeconds: 1500, derivedLinks: 0, qualifyingPairDays: 0, skipped: { gapTooLarge: 0, differentStop: 0, timeOverlap: 0, explicitRulePresent: 1, missingEndpointTime: 0 }, rule: undefined }, 'the converter provenance of derived in-seat transfers is published');
   assert.match(extensions.sources[0].converter.commit, /^[0-9a-f]{40}$/, 'the exact converter commit is recorded');
   assert.equal(extensions.sources[0].converter.ref, 'feat-arrow');
   assert.equal(extensions.sources[0].converter.pinnedCommit, undefined, 'the converter follows the latest feat-arrow');
